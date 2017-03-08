@@ -14,7 +14,7 @@ class Thing:
 
 class DataGenerator:
     def __init__(self):
-        self.size = 10
+        self.size = 4
         self.n_things = 1
         self.max_speed = 1
 
@@ -38,11 +38,13 @@ class DataGenerator:
 
     def start(self):
         self.things = [self.make_thing() for i in range(self.n_things)]
+        return self
 
     def step(self):
         for thing in self.things:
             thing.loc = [thing.loc[i] + thing.vel[i] for i in range(2)]
             self.bounce(thing)
+        return self
 
     def render(self):
         canvas = torch.zeros(self.size, self.size, 3)
@@ -51,4 +53,10 @@ class DataGenerator:
         return canvas
 
 def show(tensor):
+    plt.figure()
     return plt.imshow(tensor.numpy())
+
+gen = DataGenerator()
+gen.start()
+show(gen.render())
+show(gen.step().render())
