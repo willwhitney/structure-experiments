@@ -26,7 +26,9 @@ class Transition(nn.Module):
     def forward(self, input):
         hidden = F.tanh(self.l1(input))
         mu = F.tanh(self.lin_mu(hidden))
-        sigma = F.tanh(self.lin_sigma(hidden)) + eps
+        sigma = Variable(torch.ones(mu.size()) / 2)
+        # sigma = F.sigmoid(self.lin_sigma(hidden)) + eps
+        # print(sigma.mean().data[0])
         return (mu, sigma)
 
 class Generator(nn.Module):
@@ -130,12 +132,14 @@ class GaussianKLD(nn.Module):
 class GaussianLL(nn.Module):
     def forward(self, p, target):
         (mu, sigma) = p
+
         a = torch.sum(torch.log(sigma), 1)
         diff = (target - mu)
         b = torch.sum(torch.pow(diff, 2) / sigma, 1)
         c = mu.size(1) * math.log(2*math.pi)
         log_likelihoods = -0.5 * (a + b + c)
         # import ipdb; ipdb.set_trace()
+        # print(log_likelihoods.mean().data[0])
         return log_likelihoods.mean()
 
 def sample(p):
@@ -144,7 +148,7 @@ def sample(p):
     noise = Variable(noise)
     return mu + sigma * noise
 
-batch_size = 10
+batch_size = 32
 data_dim = 16 * 3
 hidden_dim = 100
 
@@ -152,6 +156,7 @@ KL = GaussianKLD()
 # KL1 = GaussianKLD1()
 LL = GaussianLL()
 mse = nn.MSELoss()
+l1 = nn.L1Loss()
 
 def mv_logpdf(p, target):
     return scipy.stats.multivariate_normal.logpdf(target.data.numpy(),
@@ -170,31 +175,9 @@ def test_KL(q, p):
     return results.mean()
 
 
-# model = [
-#     transition,
-#     first_inference,
-#     inference,
-#     generator,
-# ]
-
 z1_prior = (Variable(torch.zeros(batch_size, hidden_dim)),
-            Variable(torch.ones(batch_size, hidden_dim)))
+            Variable(torch.ones(batch_size, hidden_dim) / 2))
 
-# other = (Variable(torch.zeros(batch_size, hidden_dim) + 1.3),
-        #  Variable(torch.ones(batch_size, hidden_dim) * 2))
-
-# print(KL(z1_prior, other), KL1(z1_prior, other))
-# print(test_KL(z1_prior, other))
-
-
-# p = (Variable(torch.zeros(batch_size, data_dim)),
-#      Variable(torch.ones(batch_size, data_dim)))
-# target = Variable(torch.ones(batch_size, data_dim))
-# for i in range(100):
-#     p = (Variable(torch.rand(batch_size, data_dim)),
-#          Variable(torch.rand(batch_size, data_dim)))
-#     target = Variable(torch.rand(batch_size, data_dim))
-#     print((LL(p, target).data[0,0] - mv_logpdf(p, target)) / mv_logpdf(p, target))
 
 class WholeModel(nn.Module):
     def __init__(self):
@@ -204,43 +187,35 @@ class WholeModel(nn.Module):
             Variable(torch.ones(batch_size, hidden_dim))
         )
 
-        # self.transition = Transition(hidden_dim)
+        self.transition = Transition(hidden_dim)
         self.first_inference = FirstInference(data_dim, hidden_dim)
-        # self.inference = Inference(data_dim, hidden_dim)
+        self.inference = Inference(data_dim, hidden_dim)
         self.generator = Generator(hidden_dim, data_dim)
 
     def forward(self, sequence):
         loss = Variable(torch.zeros(1))
         generations = []
 
-        inferred_z1_post = self.first_inference(sequence[0])
-        # print(inferred_z1_post[1][0].data)
-        loss = loss + 1 * KL(inferred_z1_post, z1_prior)
+        inferred_z_post = self.first_inference(sequence[0])
+        z_prior = z1_prior
+        for t in range(len(sequence)):
+            divergence = KL(inferred_z_post, z_prior)
+            loss = loss + divergence
 
-        # z1_sample = sample(inferred_z1_post)
-        z1_sample = inferred_z1_post[0]
+            z_sample = sample(inferred_z_post)
+            # z_sample = inferred_z_post[0]
 
-        gen1_dist = self.generator(z1_sample)
-        # loss = loss + mse(gen1_dist[0], sequence[0])
-        loss = loss - LL(gen1_dist, sequence[0])
-        generations.append(gen1_dist)
+            gen_dist = self.generator(z_sample)
+            # log_likelihood = - mse(gen_dist[0], sequence[t])
+            log_likelihood = LL(gen_dist, sequence[t])
+            loss = loss - log_likelihood
 
-        prev_z_sample = z1_sample
+            generations.append(gen_dist)
 
-        # inferred_z_post = self.first_inference(sequence[0])
-        # z_prior = z1_prior
-        # for t in range(1, len(sequence)):
-        #     z_prior = self.transition(prev_z_sample)
-        #     inferred_z_post = self.inference(sequence[t], prev_z_sample)
-        #     # loss = loss + KL(inferred_z_post, z_prior)
+            z_prior = self.transition(z_sample)
+            inferred_z_post = self.inference(sequence[t], z_sample)
 
-        #     z_sample = sample(inferred_z_post)
-
-        #     gen_dist = self.generator(z_sample)
-        #     loss = loss + LL(gen_dist, sequence[t])
-        #     generations.append(gen_dist)
-
-        return generations, loss # / len(sequence)
+        return generations, loss / len(sequence)
 
 gen = env.DataGenerator()
 def make_real_seq(length):
@@ -248,7 +223,7 @@ def make_real_seq(length):
     for batch in range(batch_size):
         sequence[0][batch] = gen.start().render().view(gen.size**2 * 3)
         for i in range(1, length):
-            sequence[i][batch].copy(gen.step().render())
+            sequence[i][batch] = gen.step().render().view(gen.size**2 * 3)
 
     return [Variable(x) for x in sequence]
 
@@ -272,16 +247,18 @@ model = WholeModel()
 # params = list(model.parameters())
 optimizer = optim.Adam(
     model.parameters(),
-    lr=3e-2)
+    lr=1e-3)
 
 print(model)
 
+mean_loss = 0
 n_steps = 10000
 for i in range(n_steps):
     # sequence = make_seq(1, data_dim)
-    sequence = make_real_seq(1)
+    sequence = make_real_seq(2)
     # print(sequence)
     generations, loss = model(sequence)
+    mean_loss += loss.data[0]
     # if not loss.data[0] > 0:
     #     print(loss)
     #     assert(False)
@@ -295,16 +272,19 @@ for i in range(n_steps):
 
     optimizer.step()
 
-    if i % 5 == 0:
+    k = 10
+    if i % k == 0:
         seq_data = [x.data for x in sequence]
         # print(generations)
         gen_data = [(gen[0].data, gen[1].data) for gen in generations]
-        print("Loss: ", loss.data[0])
+        print("Loss: ", mean_loss / k)
+        # print("Loss: ", mean_loss / k, "Grad norm: ", mean_grad / k / len(seq_data))
+        mean_loss = 0
         # for j in range(len(sequence)):
         #     mu, sigma = gen_data[j]
         #     print(seq_data[j][0][0], mu[0][0], sigma[0][0])
 
-    if i == n_steps - 1:
+    if i % 1000 == 0 or i == n_steps - 1:
         gen_data = [(gen[0].data, gen[1].data) for gen in generations]
 
         seq_data = [x.data for x in sequence]
@@ -312,11 +292,18 @@ for i in range(n_steps):
         # %matplotlib inline
         # env.show(seq_data[0].view(4,4,3))
         for j in range(5):
-            mu, sigma = gen_data[0]
-            mu = mu[j]
-            scipy.misc.imsave(str(j) + '_input.png', seq_data[0][j].view(4,4,3).numpy())
-            scipy.misc.imsave(str(j) + '_output.png', mu.view(4,4,3).numpy())
-            env.show(mu.view(4,4,3))
+            timesteps = len(seq_data)
+            result = torch.zeros(2 * 4, timesteps * 4, 3)
+            for t in range(timesteps):
+                mu, sigma = gen_data[t]
+                mu = mu[j]
+                # import ipdb; ipdb.set_trace()
+                result[:4, 4*t:4*(t+1)] = seq_data[t][j].view(4,4,3)
+                result[4:, 4*t:4*(t+1)] = mu.view(4,4,3)
+                # scipy.misc.imsave(str(j) + '_input.png', seq_data[t][j].view(4,4,3).numpy())
+                # scipy.misc.imsave(str(j) + '_output.png', mu.view(4,4,3).numpy())
+                # env.show(mu.view(4,4,3))
+            scipy.misc.imsave(str(j) + '_result.png', result.numpy())
 
 # params = Variable(torch.rand(1,5), requires_grad=True)
 # x = Variable(torch.rand(5, 1))
@@ -348,3 +335,19 @@ for i in range(n_steps):
 # loss = mse(output, input)
 #
 # loss.backward()
+
+# other = (Variable(torch.zeros(batch_size, hidden_dim) + 1.3),
+#          Variable(torch.ones(batch_size, hidden_dim) * 2))
+#
+# print(KL(z1_prior, other)) # , KL1(z1_prior, other))
+# print(test_KL(z1_prior, other))
+
+
+# p = (Variable(torch.zeros(batch_size, data_dim)),
+#      Variable(torch.ones(batch_size, data_dim)))
+# target = Variable(torch.ones(batch_size, data_dim))
+# for i in range(100):
+#     p = (Variable(torch.rand(batch_size, data_dim)),
+#          Variable(torch.rand(batch_size, data_dim)))
+#     target = Variable(torch.rand(batch_size, data_dim))
+#     print((LL(p, target).data[0] - mv_logpdf(p, target)) / mv_logpdf(p, target))
