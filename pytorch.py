@@ -8,11 +8,15 @@ import scipy.stats
 import env
 import math
 from PIL import Image
+
+import socket
 # %matplotlib inline
 
-# gen = env.DataGenerator()
-# gen.start()
-# env.show(gen.render())
+if socket.gethostname() == 'zaan':
+    dtype = torch.cuda.FloatTensor
+else:
+    dtype = torch.FloatTensor
+
 eps = 1e-2
 class Transition(nn.Module):
     def __init__(self, hidden_dim):
@@ -26,8 +30,8 @@ class Transition(nn.Module):
     def forward(self, input):
         hidden = F.tanh(self.l1(input))
         mu = F.tanh(self.lin_mu(hidden))
-        sigma = Variable(torch.ones(mu.size()) / 2)
-        # sigma = F.sigmoid(self.lin_sigma(hidden)) + eps
+        # sigma = Variable(torch.ones(mu.size()).type(dtype) / 2)
+        sigma = F.sigmoid(self.lin_sigma(hidden)) + eps
         # print(sigma.mean().data[0])
         return (mu, sigma)
 
@@ -37,8 +41,8 @@ class Generator(nn.Module):
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim
 
-        self.layers = [nn.Linear(self.hidden_dim, self.hidden_dim)
-                       for _ in range(2)]
+        self.layers = nn.ModuleList([nn.Linear(self.hidden_dim, self.hidden_dim)
+                                     for _ in range(2)])
         self.lin_mu = nn.Linear(self.hidden_dim, self.output_dim)
         self.lin_sigma = nn.Linear(self.hidden_dim, self.output_dim)
 
@@ -60,8 +64,8 @@ class Inference(nn.Module):
 
         self.input_lin = nn.Linear(input_dim, hidden_dim)
         self.joint_lin = nn.Linear(hidden_dim * 2, hidden_dim)
-        self.layers = [nn.Linear(hidden_dim, hidden_dim)
-                       for _ in range(1)]
+        self.layers = nn.ModuleList([nn.Linear(hidden_dim, hidden_dim)
+                                     for _ in range(2)])
 
         self.lin_mu = nn.Linear(self.hidden_dim, self.hidden_dim)
         self.lin_sigma = nn.Linear(self.hidden_dim, self.hidden_dim)
@@ -86,8 +90,8 @@ class FirstInference(nn.Module):
         self.hidden_dim = hidden_dim
 
         self.input_lin = nn.Linear(input_dim, hidden_dim)
-        self.layers = [nn.Linear(hidden_dim, hidden_dim)
-                       for _ in range(2)]
+        self.layers = nn.ModuleList([nn.Linear(hidden_dim, hidden_dim)
+                                     for _ in range(2)])
 
         self.lin_mu = nn.Linear(self.hidden_dim, self.hidden_dim)
         self.lin_sigma = nn.Linear(self.hidden_dim, self.hidden_dim)
@@ -138,25 +142,25 @@ class GaussianLL(nn.Module):
         b = torch.sum(torch.pow(diff, 2) / sigma, 1)
         c = mu.size(1) * math.log(2*math.pi)
         log_likelihoods = -0.5 * (a + b + c)
-        # import ipdb; ipdb.set_trace()
-        # print(log_likelihoods.mean().data[0])
         return log_likelihoods.mean()
 
 def sample(p):
     (mu, sigma) = p
-    noise = torch.normal(torch.zeros(mu.size()), torch.ones(sigma.size()))
+    noise = torch.normal(torch.zeros(mu.size()), torch.ones(sigma.size())).type(dtype)
     noise = Variable(noise)
     return mu + sigma * noise
 
+gen = env.DataGenerator()
 batch_size = 32
-data_dim = 16 * 3
-hidden_dim = 100
+data_dim = gen.start().render().nelement()
+hidden_dim = 200
+T = 3
 
-KL = GaussianKLD()
-# KL1 = GaussianKLD1()
-LL = GaussianLL()
-mse = nn.MSELoss()
-l1 = nn.L1Loss()
+KL = GaussianKLD().type(dtype)
+# KL1 = GaussianKLD1().type(dtype)
+LL = GaussianLL().type(dtype)
+mse = nn.MSELoss().type(dtype)
+l1 = nn.L1Loss().type(dtype)
 
 def mv_logpdf(p, target):
     return scipy.stats.multivariate_normal.logpdf(target.data.numpy(),
@@ -175,16 +179,16 @@ def test_KL(q, p):
     return results.mean()
 
 
-z1_prior = (Variable(torch.zeros(batch_size, hidden_dim)),
-            Variable(torch.ones(batch_size, hidden_dim) / 2))
+z1_prior = (Variable(torch.zeros(batch_size, hidden_dim).type(dtype)),
+            Variable(torch.ones(batch_size, hidden_dim).type(dtype)))
 
 
 class WholeModel(nn.Module):
     def __init__(self):
         super(WholeModel, self).__init__()
         self.z1_prior = (
-            Variable(torch.zeros(batch_size, hidden_dim)),
-            Variable(torch.ones(batch_size, hidden_dim))
+            Variable(torch.zeros(batch_size, hidden_dim).type(dtype)),
+            Variable(torch.ones(batch_size, hidden_dim).type(dtype))
         )
 
         self.transition = Transition(hidden_dim)
@@ -193,7 +197,7 @@ class WholeModel(nn.Module):
         self.generator = Generator(hidden_dim, data_dim)
 
     def forward(self, sequence):
-        loss = Variable(torch.zeros(1))
+        loss = Variable(torch.zeros(1).type(dtype))
         generations = []
 
         inferred_z_post = self.first_inference(sequence[0])
@@ -212,12 +216,14 @@ class WholeModel(nn.Module):
 
             generations.append(gen_dist)
 
-            z_prior = self.transition(z_sample)
-            inferred_z_post = self.inference(sequence[t], z_sample)
+            if t < len(sequence) - 1:
+                z_prior = self.transition(z_sample)
+                inferred_z_post = self.inference(sequence[t+1], z_sample)
+                # inferred_z_post = self.first_inference(sequence[t+1])
 
         return generations, loss / len(sequence)
 
-gen = env.DataGenerator()
+
 def make_real_seq(length):
     sequence = [torch.zeros(batch_size, gen.size**2 * 3) for _ in range(length)]
     for batch in range(batch_size):
@@ -225,25 +231,18 @@ def make_real_seq(length):
         for i in range(1, length):
             sequence[i][batch] = gen.step().render().view(gen.size**2 * 3)
 
-    return [Variable(x) for x in sequence]
-
-# TODO: the problem is the sampling
-# take it out for now!
+    return [Variable(x.type(dtype)) for x in sequence]
 
 def make_seq(length, dim):
     sequence = [torch.zeros(batch_size, dim).normal_(0.5, 0.1)]
     for i in range(1, length):
         noise = torch.zeros(batch_size, dim) # torch.normal([0.0, 0.0], [0.1, 0.1])
         sequence.append(sequence[i-1] + noise)
-    sequence = [Variable(x) for x in sequence]
+    sequence = [Variable(x.type(dtype)) for x in sequence]
     return sequence
 
-# def zero_params():
-#     for module in model:
-#         module.zero_grad()
 
-
-model = WholeModel()
+model = WholeModel().type(dtype)
 # params = list(model.parameters())
 optimizer = optim.Adam(
     model.parameters(),
@@ -255,34 +254,20 @@ mean_loss = 0
 n_steps = 10000
 for i in range(n_steps):
     # sequence = make_seq(1, data_dim)
-    sequence = make_real_seq(2)
-    # print(sequence)
+    sequence = make_real_seq(T)
+
     generations, loss = model(sequence)
     mean_loss += loss.data[0]
-    # if not loss.data[0] > 0:
-    #     print(loss)
-    #     assert(False)
-    # print(generations)
-    # print(loss)
-    # print(loss.data[0])
 
     model.zero_grad()
     loss.backward()
-    # print(sequence[0].grad.data)
 
     optimizer.step()
 
     k = 10
     if i % k == 0:
-        seq_data = [x.data for x in sequence]
-        # print(generations)
-        gen_data = [(gen[0].data, gen[1].data) for gen in generations]
-        print("Loss: ", mean_loss / k)
-        # print("Loss: ", mean_loss / k, "Grad norm: ", mean_grad / k / len(seq_data))
+        print("Step: ", i, "\tLoss: ", mean_loss / k)
         mean_loss = 0
-        # for j in range(len(sequence)):
-        #     mu, sigma = gen_data[j]
-        #     print(seq_data[j][0][0], mu[0][0], sigma[0][0])
 
     if i % 1000 == 0 or i == n_steps - 1:
         gen_data = [(gen[0].data, gen[1].data) for gen in generations]
@@ -293,13 +278,13 @@ for i in range(n_steps):
         # env.show(seq_data[0].view(4,4,3))
         for j in range(5):
             timesteps = len(seq_data)
-            result = torch.zeros(2 * 4, timesteps * 4, 3)
+            result = torch.zeros(2 * gen.size, timesteps * gen.size, 3)
             for t in range(timesteps):
                 mu, sigma = gen_data[t]
                 mu = mu[j]
                 # import ipdb; ipdb.set_trace()
-                result[:4, 4*t:4*(t+1)] = seq_data[t][j].view(4,4,3)
-                result[4:, 4*t:4*(t+1)] = mu.view(4,4,3)
+                result[:gen.size, gen.size*t:gen.size*(t+1)] = seq_data[t][j].view(gen.size,gen.size,3)
+                result[gen.size:, gen.size*t:gen.size*(t+1)] = mu.view(gen.size,gen.size,3)
                 # scipy.misc.imsave(str(j) + '_input.png', seq_data[t][j].view(4,4,3).numpy())
                 # scipy.misc.imsave(str(j) + '_output.png', mu.view(4,4,3).numpy())
                 # env.show(mu.view(4,4,3))

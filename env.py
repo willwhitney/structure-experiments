@@ -17,7 +17,7 @@ class DataGenerator:
     def __init__(self):
         self.size = 4
         self.n_things = 1
-        self.max_speed = 0
+        self.max_speed = 1
 
     def make_thing(self):
         return Thing(
@@ -58,7 +58,7 @@ def show(tensor):
     plt.figure()
     return plt.imshow(tensor.numpy())
 
-gen = DataGenerator()
-gen.start()
-show(gen.render())
-show(gen.step().render())
+# gen = DataGenerator()
+# gen.start()
+# show(gen.render())
+# show(gen.step().render())
