@@ -12,10 +12,10 @@ class Thing:
         self.loc = loc
         self.vel = vel
 
-# fixed_color = [random.uniform(0, 1) for _ in range(3)]
+fixed_color = [random.uniform(0, 1) for _ in range(3)]
 class DataGenerator:
     def __init__(self):
-        self.size = 4
+        self.size = 6
         self.n_things = 1
         self.max_speed = 1
 
