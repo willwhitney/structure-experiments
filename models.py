@@ -25,13 +25,13 @@ class WholeModel(nn.Module):
 
         image_dim = [3, self.img_size, self.img_size]
         self.transition = Transition(hidden_dim)
-        self.first_inference = FirstInference(prod(image_dim), hidden_dim)
-        self.inference = Inference(prod(image_dim), hidden_dim)
-        self.generator = Generator(hidden_dim, prod(image_dim))
+        # self.first_inference = FirstInference(prod(image_dim), hidden_dim)
+        # self.inference = Inference(prod(image_dim), hidden_dim)
+        # self.generator = Generator(hidden_dim, prod(image_dim))
 
-        # self.first_inference = ConvolutionalFirstInference(image_dim, hidden_dim)
-        # self.inference = ConvolutionalInference(image_dim, hidden_dim)
-        # self.generator = ConvolutionalGenerator(hidden_dim, image_dim)
+        self.first_inference = ConvolutionalFirstInference(image_dim, hidden_dim)
+        self.inference = ConvolutionalInference(image_dim, hidden_dim)
+        self.generator = ConvolutionalGenerator(hidden_dim, image_dim)
 
     def forward(self, sequence):
         loss = Variable(torch.zeros(1).type(dtype))
@@ -62,8 +62,7 @@ class WholeModel(nn.Module):
             # z_sample = inferred_z_post[0]
 
             gen_dist = self.generator(z_sample)
-            # log_likelihood = - mse(gen_dist[0], sequence[t])
-            log_likelihood = LL(gen_dist, sequence[t])
+            log_likelihood = LL(gen_dist, reshaped_sequence[t])
             loss = loss - log_likelihood
 
             generations.append(gen_dist)

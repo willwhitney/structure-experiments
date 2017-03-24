@@ -95,7 +95,7 @@ for i in range(n_steps):
             z_vars = [999]
         print(
             ("Step: {:8d}, Loss: {:8.3f}, NLL: {:8.3f}, "
-             "Divergence: {:8.3e}, z variance: {:8.3f}").format(
+             "Divergence: {:8.3f}, z variance: {:8.3f}").format(
                 i,
                 mean_loss / k,
                 (mean_loss - mean_divergence) / k,

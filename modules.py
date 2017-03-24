@@ -39,8 +39,8 @@ class Transition(nn.Module):
     def forward(self, input):
         hidden = F.tanh(self.l1(input))
         mu = 10 * F.tanh(self.lin_mu(hidden) / 10)
-        # sigma = Variable(torch.ones(mu.size()).type(dtype) / 2)
-        sigma = F.sigmoid(self.lin_sigma(hidden)) + eps
+        # sigma = Variable(torch.ones(mu.size()).type_as(mu.data) / 50)
+        sigma = F.sigmoid(self.lin_sigma(hidden)) + 1e-2
         # print(sigma.mean().data[0])
         return (mu, sigma)
 
@@ -55,6 +55,8 @@ class Generator(nn.Module):
         self.lin_mu = nn.Linear(self.hidden_dim, self.output_dim)
         self.lin_sigma = nn.Linear(self.hidden_dim, self.output_dim)
 
+        list(self.lin_mu.parameters())[1].data.normal_(0.5, 0.01)
+
     def forward(self, input):
         current = input
         for layer in self.layers:
@@ -62,8 +64,8 @@ class Generator(nn.Module):
             current = F.tanh(current)
 
         mu_preactivation = self.lin_mu(current)
-        mu = F.sigmoid(mu_preactivation) + 0.1 * mu_preactivation
-        # mu = F.leaky_relu(mu_preactivation)
+        # mu = F.sigmoid(mu_preactivation) + 0.1 * mu_preactivation
+        mu = F.leaky_relu(mu_preactivation)
 
         # sigma = F.sigmoid(self.lin_sigma(current)) + 3e-2
         sigma = Variable(torch.ones(mu.size()).type_as(mu.data) / 50)
@@ -99,7 +101,6 @@ class ConvolutionalGenerator(nn.Module):
                                         self.planes[l],
                                         self.kernels[l],
                                         padding=1))
-
 
     def forward(self, input):
         current = input
@@ -278,6 +279,11 @@ class GaussianKLD(nn.Module):
     def forward(self, q, p):
         (mu_q, sigma_q) = q
         (mu_p, sigma_p) = p
+        mu_q = batch_flatten(mu_q)
+        sigma_q = batch_flatten(sigma_q)
+        mu_p = batch_flatten(mu_p)
+        sigma_p = batch_flatten(sigma_p)
+
 
         a = torch.sum(torch.log(sigma_p), 1) - torch.sum(torch.log(sigma_q), 1)
         b = torch.sum(sigma_q / sigma_p, 1)
@@ -302,6 +308,9 @@ class GaussianKLD(nn.Module):
 class GaussianLL(nn.Module):
     def forward(self, p, target):
         (mu, sigma) = p
+        mu = batch_flatten(mu)
+        sigma = batch_flatten(sigma)
+        target = batch_flatten(target)
 
         # sigma = Variable(torch.ones(sigma.size()).type_as(sigma.data) / 10)
 

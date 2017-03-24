@@ -22,7 +22,7 @@ def random_color():
 fixed_color = [1.0 for _ in range(3)]
 class DataGenerator:
     def __init__(self):
-        self.size = 3
+        self.size = 6
         self.n_things = 1
         self.max_speed = 1
 

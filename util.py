@@ -58,9 +58,8 @@ def image_tensor(inputs, padding=1):
         return result
 
 def save_image(filename, tensor):
-    img = scipy.misc.toimage(tensor.cpu().numpy(),
-                             high=255*tensor.max(),
-                             channel_axis=0)
+    tensor = tensor.clamp(0, 1)
+    img = scipy.misc.toimage(tensor.cpu().numpy(), high=255*tensor.max(), channel_axis=0)
     img.save(filename)
 
 def save_tensors_image(filename, inputs, padding=1):
@@ -106,16 +105,5 @@ def sample(p):
         noise = torch.autograd.variable.Variable(noise)
     return mu + sigma * noise
 
-# def crappyhist(a, bins):
-#     '''Draws a crappy text-mode histogram of an array'''
-#     import numpy as np
-#     import string
-#     from math import log10
-#
-#     h,b = np.histogram(a, bins)
-#
-#     for i in range (0, bins-1):
-# 	    print string.rjust(`b[i]`, 7)[:int(log10(
-#                    np.amax(b)))+5], '| ', '#'*int(70*h[i-1]/np.amax(h))
-#
-#     print string.rjust(`b[bins]`, 7)[:int(log10(np.amax(b)))+5]
+def batch_flatten(x):
+    return x.resize(x.size(0), prod(x.size()[1:]))
