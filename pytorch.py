@@ -11,6 +11,7 @@ import math
 import os
 from PIL import Image
 import argparse
+import progressbar
 
 from modules import *
 from models import *
@@ -19,7 +20,7 @@ from util import *
 from params import *
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--name', default=os.environ['CUDA_VISIBLE_DEVICES'])
+parser.add_argument('--name', default=get_gpu())
 parser.add_argument('--lr', default=3e-4, type=float)
 opt = parser.parse_args()
 opt.save = 'results/' + opt.name
@@ -57,8 +58,8 @@ def make_seq(length, dim):
     sequence = [Variable(x.type(dtype)) for x in sequence]
     return sequence
 
-# model = WholeModel(gen.size).type(dtype)
-model = WholeModel(gen.size).type(dtype)
+model = VAEModel(gen.size).type(dtype)
+# model = IndependentModel(2, gen.size).type(dtype)
 optimizer = optim.Adam(
     model.parameters(),
     lr=opt.lr)
@@ -67,21 +68,28 @@ print(model)
 
 mean_loss = 0
 mean_divergence = 0
-z_vars = []
+z_var_means = []
+z_var_min = 1e6
+z_var_max = -1
 n_steps = int(1e6)
+
+k = 1000
+progress = progressbar.ProgressBar(max_value=k)
 for i in range(n_steps):
-    # sequence = make_seq(1, data_dim)
     sequence = make_real_seq(5)
 
     # sequence = make_real_seq(np.random.geometric(0.3))
     # while len(sequence) < 3:
     #     sequence = make_real_seq(np.random.geometric(0.3))
 
-    generations, loss, divergence, z_var = model(sequence)
+    generations, loss, divergence, batch_z_vars = model(sequence)
     mean_loss += loss.data[0]
     mean_divergence += divergence
-    if z_var > 0:
-        z_vars.append(z_var)
+
+    var_min, var_mean, var_max = batch_z_vars
+    z_var_means.append(var_mean)
+    z_var_min = min(var_min, z_var_min)
+    z_var_max = max(var_max, z_var_max)
 
     model.zero_grad()
     loss.backward()
@@ -89,31 +97,40 @@ for i in range(n_steps):
     # torch.nn.utils.clip_grad_norm(model.parameters(), 10)
     optimizer.step()
 
-    k = 1000
+    progress.update(i%k)
     if i % k == 0 and i > 0:
-        if len(z_vars) == 0:
-            z_vars = [999]
+        progress.finish()
+        clear_progressbar()
+
+        elapsed_time = progress.end_time - progress.start_time
+        elapsed_seconds = elapsed_time.total_seconds()
+
+        if len(z_var_means) == 0:
+            z_var_means = [-1]
         print(
             ("Step: {:8d}, Loss: {:8.3f}, NLL: {:8.3f}, "
-             "Divergence: {:8.3f}, z variance: {:8.3f}").format(
+             "Divergence: {:6.3f}, "
+             "z variance [min, mean, max]: [{:6.3f}, {:6.3f}, {:6.3f}], "
+             "ms/sequence: {:6.2f}").format(
                 i,
                 mean_loss / k,
                 (mean_loss - mean_divergence) / k,
                 mean_divergence / k,
-                sum(z_vars) / len(z_vars))
-        )
-        # print("Step: ", i,
-        #       "\tLoss: ", mean_loss / k,
-        #       "\tNLL: ", (mean_loss - mean_divergence) / k,
-        #       "\tDivergence: ", mean_divergence / k,
-        #       "\tz variance: ", sum(z_vars) / len(z_vars))
+                z_var_min,
+                sum(z_var_means) / len(z_var_means),
+                z_var_max,
+                elapsed_seconds / k / batch_size * 1000))
+
         mean_loss = 0
         mean_divergence = 0
-        z_vars = []
+        z_var_means = []
+        z_var_min = 1e6
+        z_var_max = -1
+        progress = progressbar.ProgressBar(max_value=k)
 
     if i % 1000 == 0 or i == n_steps - 1:
 
-        # show some results from the latest batch
+        # save some results from the latest batch
         mus_data = [gen[0].data for gen in generations]
         seq_data = [x.data for x in sequence]
         for j in range(5):
@@ -121,24 +138,56 @@ for i in range(n_steps):
             truth = [x[j].view(3,gen.size,gen.size) for x in seq_data]
             save_tensors_image(opt.save + '/result_'+str(j)+'.png', [truth, mus])
 
-        # show sequence generations
-        samples = model.generate(make_real_seq(2), 20, True)
+        priming = make_real_seq(2)
+
+        # save sequence generations
+        samples = model.generate(priming, 20, True)
         mus = [x.data for x in samples]
         for j in range(5):
             mu = [x[j].view(3,gen.size,gen.size) for x in mus]
             save_tensors_image(opt.save + '/gen_'+str(j)+'.png', mu)
 
-        # show max-likelihood generations
-        samples = model.generate(make_real_seq(2), 20, False)
+        # save max-likelihood generations
+        samples = model.generate(priming, 20, False)
         mus = [x.data for x in samples]
         for j in range(5):
             mu = [x[j].view(3,gen.size,gen.size) for x in mus]
             save_tensors_image(opt.save + '/ml_'+str(j)+'.png', mu)
 
-        # show samples from the first-frame prior
+        # save samples from the first-frame prior
         if not isinstance(model, MSEModel):
             prior_sample = sample(model.z1_prior)
             image_dist = model.generator(prior_sample)
             image_sample = image_dist[0].resize(32, 3, gen.size, gen.size)
             image_sample = [[image] for image in image_sample]
             save_tensors_image(opt.save + '/prior_samples.png', image_sample)
+
+        # save ML generations with only one latent evolving
+        if isinstance(model, IndependentModel):
+            samples = model.generate_independent(priming, 20, False)
+            samples = [[x.data for x in sample_row]
+                       for sample_row in samples]
+            for j in range(5):
+                image = [[x[j].view(3,gen.size,gen.size) for x in sample_row]
+                          for sample_row in samples]
+                save_tensors_image(opt.save + '/ind_ml_'+str(j)+'.png', image)
+
+        # save samples with only one latent evolving
+        if isinstance(model, IndependentModel):
+            samples = model.generate_independent(priming, 20, True)
+            samples = [[x.data for x in sample_row]
+                       for sample_row in samples]
+            for j in range(5):
+                image = [[x[j].view(3,gen.size,gen.size) for x in sample_row]
+                          for sample_row in samples]
+                save_tensors_image(opt.save + '/ind_gen_'+str(j)+'.png', image)
+
+        # save samples with only one latent randomly sampling
+        if isinstance(model, IndependentModel):
+            samples = model.generate_variations(priming, 20)
+            samples = [[x.data for x in sample_row]
+                       for sample_row in samples]
+            for j in range(5):
+                image = [[x[j].view(3,gen.size,gen.size) for x in sample_row]
+                          for sample_row in samples]
+                save_tensors_image(opt.save + '/ind_resample_'+str(j)+'.png', image)

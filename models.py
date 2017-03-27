@@ -11,27 +11,26 @@ KL = GaussianKLD().type(dtype)
 LL = GaussianLL().type(dtype)
 mse = nn.MSELoss().type(dtype)
 
-hidden_dim = 100
-
-class WholeModel(nn.Module):
+class VAEModel(nn.Module):
     def __init__(self, img_size):
-        super(WholeModel, self).__init__()
+        super(VAEModel, self).__init__()
+        self.hidden_dim = 100
         self.img_size = img_size
 
         self.z1_prior = (
-            Variable(torch.zeros(batch_size, hidden_dim).type(dtype)),
-            Variable(torch.ones(batch_size, hidden_dim).type(dtype))
+            Variable(torch.zeros(batch_size, self.hidden_dim).type(dtype)),
+            Variable(torch.ones(batch_size, self.hidden_dim).type(dtype))
         )
 
         image_dim = [3, self.img_size, self.img_size]
-        self.transition = Transition(hidden_dim)
-        # self.first_inference = FirstInference(prod(image_dim), hidden_dim)
-        # self.inference = Inference(prod(image_dim), hidden_dim)
-        # self.generator = Generator(hidden_dim, prod(image_dim))
+        self.transition = Transition(self.hidden_dim)
+        # self.first_inference = FirstInference(prod(image_dim), self.hidden_dim)
+        # self.inference = Inference(prod(image_dim), self.hidden_dim)
+        # self.generator = Generator(self.hidden_dim, prod(image_dim))
 
-        self.first_inference = ConvolutionalFirstInference(image_dim, hidden_dim)
-        self.inference = ConvolutionalInference(image_dim, hidden_dim)
-        self.generator = ConvolutionalGenerator(hidden_dim, image_dim)
+        self.first_inference = ConvFirstInference(image_dim, self.hidden_dim)
+        self.inference = ConvInference(image_dim, self.hidden_dim)
+        self.generator = ConvGenerator(self.hidden_dim, image_dim)
 
     def forward(self, sequence):
         loss = Variable(torch.zeros(1).type(dtype))
@@ -41,7 +40,7 @@ class WholeModel(nn.Module):
         generations = []
 
         reshaped_sequence = sequence
-        if isinstance(self.inference, ConvolutionalInference):
+        if isinstance(self.inference, ConvInference):
             reshaped_sequence = [x.resize(x.size(0), 3, self.img_size, self.img_size)
                                  for x in sequence]
         # reshaped_sequence = [x.resize(x.size(0), self.img_size, self.img_size, 3)
@@ -53,6 +52,8 @@ class WholeModel(nn.Module):
         z_prior = self.z1_prior
 
         z_var_mean = 0
+        z_var_min = 1e6
+        z_var_max = -1
         for t in range(len(sequence)):
             divergence = KL(inferred_z_post, z_prior)
             seq_divergence = seq_divergence + divergence
@@ -74,18 +75,20 @@ class WholeModel(nn.Module):
                 inferred_z_post = self.inference(reshaped_sequence[t+1], z_sample)
 
                 z_var_mean += z_prior[1].mean().data[0]
+                z_var_min = min(z_var_min, z_prior[1].data.min())
+                z_var_max = max(z_var_max, z_prior[1].data.max())
 
         z_var_mean = z_var_mean / (len(sequence) - 1) if len(sequence) > 1 else -1
         return (generations,
                 loss / len(sequence),
                 seq_divergence.data[0] / len(sequence),
-                z_var_mean)
+                (z_var_min, z_var_mean, z_var_max))
 
     def generate(self, priming, steps, sampling=True):
         priming_steps = len(priming)
         generations = []
 
-        if isinstance(self.inference, ConvolutionalInference):
+        if isinstance(self.inference, ConvInference):
             priming = [x.resize(x.size(0),  3, self.img_size, self.img_size)
                        for x in priming]
 
@@ -104,20 +107,193 @@ class WholeModel(nn.Module):
             generations.append(self.generator(latent)[0])
         return generations
 
+class IndependentModel(nn.Module):
+    def __init__(self, n_latents, img_size):
+        super(IndependentModel, self).__init__()
+        self.n_latents = n_latents
+        self.img_size = img_size
+        self.hidden_dim = 50
+
+        single_z1 = (
+            Variable(torch.zeros(batch_size, self.hidden_dim).type(dtype)),
+            Variable(torch.ones(batch_size, self.hidden_dim).type(dtype))
+        )
+        self.z1_prior = (torch.cat([single_z1[0] for _ in range(n_latents)], 1),
+                         torch.cat([single_z1[1] for _ in range(n_latents)], 1))
+
+        total_z_dim = n_latents * self.hidden_dim
+
+        image_dim = [3, self.img_size, self.img_size]
+        self.transitions = nn.ModuleList([Transition(self.hidden_dim)
+                                          for _ in range(n_latents)])
+        # self.first_inference = FirstInference(prod(image_dim), self.hidden_dim)
+        # self.inference = Inference(prod(image_dim), self.hidden_dim)
+        # self.generator = Generator(self.hidden_dim, prod(image_dim))
+
+        self.first_inference = ConvFirstInference(image_dim, total_z_dim)
+        self.inference = ConvInference(image_dim, total_z_dim)
+        self.generator = ConvGenerator(total_z_dim, image_dim)
+
+    def forward(self, sequence):
+        loss = Variable(torch.zeros(1).type(dtype))
+        seq_divergence = Variable(torch.zeros(1).type(dtype),
+                                  requires_grad=False)
+        batch_size = sequence[0].size(0)
+        generations = []
+
+        reshaped_sequence = sequence
+        if isinstance(self.inference, ConvInference):
+            reshaped_sequence = [x.resize(x.size(0),
+                                          3,
+                                          self.img_size,
+                                          self.img_size)
+                                 for x in sequence]
+
+        inferred_z_post = self.first_inference(reshaped_sequence[0])
+        cat_prior = self.z1_prior
+
+        z_var_mean = 0
+        z_var_min = 1e6
+        z_var_max = -1
+        for t in range(len(sequence)):
+            divergence = KL(inferred_z_post, cat_prior)
+            seq_divergence = seq_divergence + divergence
+            loss = loss + divergence
+
+            z_sample = sample(inferred_z_post)
+            # z_sample = inferred_z_post[0]
+
+            gen_dist = self.generator(z_sample)
+            log_likelihood = LL(gen_dist, reshaped_sequence[t])
+            loss = loss - log_likelihood
+
+            generations.append(gen_dist)
+
+            if t < len(sequence) - 1:
+                z_prior = []
+                for i, trans in enumerate(self.transitions):
+                    previous = z_sample[:, i*self.hidden_dim : (i+1)*self.hidden_dim]
+                    z_prior.append(trans(previous))
+
+                cat_prior = (torch.cat([prior[0] for prior in z_prior], 1),
+                             torch.cat([prior[1] for prior in z_prior], 1))
+
+                inferred_z_post = self.inference(reshaped_sequence[t+1], z_sample)
+                z_var_mean += cat_prior[1].mean().data[0]
+                z_var_min = min(z_var_min, cat_prior[1].data.min())
+                z_var_max = max(z_var_max, cat_prior[1].data.max())
+
+
+        z_var_mean = z_var_mean / (len(sequence) - 1) if len(sequence) > 1 else -1
+        return (generations,
+                loss / len(sequence),
+                seq_divergence.data[0] / len(sequence),
+                (z_var_min, z_var_mean, z_var_max))
+
+    def generate(self, priming, steps, sampling=True):
+        priming_steps = len(priming)
+        generations = []
+
+        if isinstance(self.inference, ConvInference):
+            priming = [x.resize(x.size(0),  3, self.img_size, self.img_size)
+                       for x in priming]
+
+        latent = self.first_inference(priming[0])[0]
+        generations.append(self.generator(latent)[0])
+        for t in range(1, priming_steps):
+            latent = self.inference(priming[t], latent)[0]
+            generations.append(self.generator(latent)[0])
+
+        for t in range(steps - priming_steps):
+            # make a transition
+            z_prior = []
+            for i, trans in enumerate(self.transitions):
+                previous = latent[:, i*self.hidden_dim : (i+1)*self.hidden_dim]
+                z_prior.append(trans(previous))
+            latent_dist = (torch.cat([prior[0] for prior in z_prior], 1),
+                           torch.cat([prior[1] for prior in z_prior], 1))
+
+            if sampling:
+                latent = sample(latent_dist)
+            else:
+                latent = sample((latent_dist[0], latent_dist[1] / 100))
+            generations.append(self.generator(latent)[0])
+        return generations
+
+    def generate_independent(self, priming, steps, sampling=True):
+        priming_steps = len(priming)
+        generations = [[] for _ in range(self.n_latents)]
+
+        if isinstance(self.inference, ConvInference):
+            priming = [x.resize(x.size(0),  3, self.img_size, self.img_size)
+                       for x in priming]
+
+        latent = self.first_inference(priming[0])[0]
+        generation = self.generator(latent)[0]
+        [generations[i].append(generation) for i in range(len(generations))]
+        for t in range(1, priming_steps):
+            latent = self.inference(priming[t], latent)[0]
+            generation = self.generator(latent)[0]
+            [generations[i].append(generation) for i in range(len(generations))]
+
+        starting_latent = latent.clone()
+        for z_i in range(self.n_latents):
+            latent = starting_latent.clone()
+            trans = self.transitions[z_i]
+            for t in range(steps - priming_steps):
+                previous = latent[:, z_i*self.hidden_dim : (z_i+1)*self.hidden_dim].clone()
+                predicted_z = trans(previous)
+
+                if sampling:
+                    new_z = sample(predicted_z)
+                else:
+                    new_z = sample((predicted_z[0], predicted_z[1] / 100))
+                latent[:, z_i*self.hidden_dim : (z_i+1)*self.hidden_dim] = new_z
+
+                generations[z_i].append(self.generator(latent)[0])
+        return generations
+
+    def generate_variations(self, priming, steps):
+        priming_steps = len(priming)
+        generations = [[] for _ in range(self.n_latents)]
+
+        if isinstance(self.inference, ConvInference):
+            priming = [x.resize(x.size(0), 3, self.img_size, self.img_size)
+                       for x in priming]
+
+        latent = self.first_inference(priming[0])[0]
+        generation = self.generator(latent)[0]
+        [generations[i].append(generation) for i in range(len(generations))]
+        for t in range(1, priming_steps):
+            latent = self.inference(priming[t], latent)[0]
+            generation = self.generator(latent)[0]
+            [generations[i].append(generation) for i in range(len(generations))]
+
+        starting_latent = latent.clone()
+        for z_i in range(self.n_latents):
+            latent = starting_latent.clone()
+            for t in range(steps - priming_steps):
+                latent[:, z_i*self.hidden_dim : (z_i+1)*self.hidden_dim].data.normal_(0, 1)
+
+                generations[z_i].append(self.generator(latent)[0])
+        return generations
+
+
 class MSEModel(nn.Module):
     def __init__(self, img_size):
         super(MSEModel, self).__init__()
         self.img_size = img_size
+        self.hidden_dim = 100
 
         image_dim = [3, self.img_size, self.img_size]
-        self.transition = Transition(hidden_dim)
-        # self.first_inference = FirstInference(prod(image_dim), hidden_dim)
-        # self.inference = Inference(prod(image_dim), hidden_dim)
-        self.generator = Generator(hidden_dim, prod(image_dim))
+        self.transition = Transition(self.hidden_dim)
+        # self.first_inference = FirstInference(prod(image_dim), self.hidden_dim)
+        # self.inference = Inference(prod(image_dim), self.hidden_dim)
+        # self.generator = Generator(self.hidden_dim, prod(image_dim))
 
-        self.first_inference = ConvolutionalFirstInference(image_dim, hidden_dim)
-        self.inference = ConvolutionalInference(image_dim, hidden_dim)
-        # self.generator = ConvolutionalGenerator(hidden_dim, image_dim)
+        self.first_inference = ConvFirstInference(image_dim, self.hidden_dim)
+        self.inference = ConvInference(image_dim, self.hidden_dim)
+        self.generator = ConvGenerator(self.hidden_dim, image_dim)
 
     def forward(self, sequence):
         loss = Variable(torch.zeros(1).type(dtype))
@@ -127,7 +303,7 @@ class MSEModel(nn.Module):
         generations = [(sequence[0], None)]
 
         reshaped_sequence = sequence
-        if isinstance(self.inference, ConvolutionalInference):
+        if isinstance(self.inference, ConvInference):
             reshaped_sequence = [x.resize(x.size(0), 3, self.img_size, self.img_size)
                                  for x in sequence]
         # reshaped_sequence = [x.transpose(2, 3).transpose(1, 2)
@@ -173,7 +349,7 @@ class MSEModel(nn.Module):
     def generate(self, priming, steps, sampling=True):
         generations = [priming[0]]
 
-        if isinstance(self.inference, ConvolutionalInference):
+        if isinstance(self.inference, ConvInference):
             priming = [x.resize(x.size(0),  3, self.img_size, self.img_size)
                        for x in priming]
         # priming = [x.transpose(2, 3).transpose(1, 2)

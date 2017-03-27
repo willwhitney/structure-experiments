@@ -31,16 +31,23 @@ class Transition(nn.Module):
     def __init__(self, hidden_dim):
         super(Transition, self).__init__()
         self.dim = hidden_dim
-        self.l1 = nn.Linear(self.dim, self.dim)
+
+        self.layers = nn.ModuleList([nn.Linear(self.dim, self.dim)
+                                     for _ in range(4)])
+        # self.l1 = nn.Linear(self.dim, self.dim)
         self.lin_mu = nn.Linear(self.dim, self.dim)
         self.lin_sigma = nn.Linear(self.dim, self.dim)
 
-
     def forward(self, input):
-        hidden = F.tanh(self.l1(input))
-        mu = 10 * F.tanh(self.lin_mu(hidden) / 10)
-        # sigma = Variable(torch.ones(mu.size()).type_as(mu.data) / 50)
-        sigma = F.sigmoid(self.lin_sigma(hidden)) + 1e-2
+        current = input
+        for layer in self.layers:
+            current = layer(current)
+            current = F.tanh(current)
+
+        # hidden = F.tanh(self.l1(input))
+        mu = 10 * F.tanh(self.lin_mu(current) / 10)
+        sigma = Variable(torch.ones(mu.size()).type_as(mu.data) / 10)
+        # sigma = F.softplus(self.lin_sigma(current)) + 1e-2
         # print(sigma.mean().data[0])
         return (mu, sigma)
 
@@ -71,9 +78,9 @@ class Generator(nn.Module):
         sigma = Variable(torch.ones(mu.size()).type_as(mu.data) / 50)
         return (mu, sigma)
 
-class ConvolutionalGenerator(nn.Module):
+class ConvGenerator(nn.Module):
     def __init__(self, hidden_dim, output_dims):
-        super(ConvolutionalGenerator, self).__init__()
+        super(ConvGenerator, self).__init__()
         self.hidden_dim = hidden_dim
         self.output_dims = output_dims
 
@@ -101,6 +108,8 @@ class ConvolutionalGenerator(nn.Module):
                                         self.planes[l],
                                         self.kernels[l],
                                         padding=1))
+
+        self.convs[-1].bias.data.add_(0.5)
 
     def forward(self, input):
         current = input
@@ -146,14 +155,14 @@ class Inference(nn.Module):
         sigma = F.sigmoid(self.lin_sigma(new_hidden)) + eps
         return (mu, sigma)
 
-class ConvolutionalInference(nn.Module):
+class ConvInference(nn.Module):
     def __init__(self, input_dims, hidden_dim):
-        super(ConvolutionalInference, self).__init__()
+        super(ConvInference, self).__init__()
         self.input_dims = input_dims
         self.hidden_dim = hidden_dim
 
-        self.planes = [32, 16]
-        self.kernels = [3, 3]
+        self.planes = [32, 16, 16, 16]
+        self.kernels = [3, 3, 3, 3]
         self.out_dims = [input_dims]
         for l in range(len(self.planes)):
             in_planes, in_height, in_width = self.out_dims[-1]
@@ -163,14 +172,14 @@ class ConvolutionalInference(nn.Module):
                 in_height,
                 in_width,
                 self.kernels[l],
-                padding=0)))
+                padding=1)))
         self.convs = nn.ModuleList()
         for l in range(len(self.planes)):
             # confusingly this is actually offset by 1
             in_planes, in_height, in_width = self.out_dims[l]
 
             self.convs.append(nn.Conv2d(
-                in_planes, self.planes[l], self.kernels[l], padding=0))
+                in_planes, self.planes[l], self.kernels[l], padding=1))
 
         # self.conv1 = nn.Conv2d(input_dims[0], 32, 3)
 
@@ -224,14 +233,14 @@ class FirstInference(nn.Module):
         sigma = F.sigmoid(self.lin_sigma(new_hidden)) + eps
         return (mu, sigma)
 
-class ConvolutionalFirstInference(nn.Module):
+class ConvFirstInference(nn.Module):
     def __init__(self, input_dims, hidden_dim):
-        super(ConvolutionalFirstInference, self).__init__()
+        super(ConvFirstInference, self).__init__()
         self.input_dims = input_dims
         self.hidden_dim = hidden_dim
 
-        self.planes = [32, 16]
-        self.kernels = [3, 3]
+        self.planes = [32, 16, 16, 16]
+        self.kernels = [3, 3, 3, 3]
         self.out_dims = [input_dims]
         for l in range(len(self.planes)):
             in_planes, in_height, in_width = self.out_dims[-1]
@@ -240,14 +249,14 @@ class ConvolutionalFirstInference(nn.Module):
                                                in_height,
                                                in_width,
                                                self.kernels[l],
-                                               padding=0)))
+                                               padding=1)))
         self.convs = nn.ModuleList()
         for l in range(len(self.planes)):
             # confusingly this is actually offset by 1
             in_planes, in_height, in_width = self.out_dims[l]
 
             self.convs.append(nn.Conv2d(
-                in_planes, self.planes[l], self.kernels[l], padding=0))
+                in_planes, self.planes[l], self.kernels[l], padding=1))
 
         # self.conv1 = nn.Conv2d(input_dims[0], 32, 3)
         self.input_lin = nn.Linear(prod(self.out_dims[-1]), hidden_dim)

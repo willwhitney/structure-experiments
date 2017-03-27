@@ -23,7 +23,7 @@ fixed_color = [1.0 for _ in range(3)]
 class DataGenerator:
     def __init__(self):
         self.size = 6
-        self.n_things = 1
+        self.n_things = 2
         self.max_speed = 1
 
     def make_thing(self):
@@ -50,6 +50,7 @@ class DataGenerator:
         return self
 
     def step(self):
+        # return self
         for thing in self.things:
             thing.loc = [thing.loc[i] + thing.vel[i] for i in range(2)]
             self.bounce(thing)
