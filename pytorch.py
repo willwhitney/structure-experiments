@@ -22,6 +22,7 @@ from params import *
 parser = argparse.ArgumentParser()
 parser.add_argument('--name', default=get_gpu())
 parser.add_argument('--lr', default=3e-4, type=float)
+parser.add_argument('--lr_decay', action="store_true")
 opt = parser.parse_args()
 opt.save = 'results/' + opt.name
 
@@ -34,7 +35,6 @@ if not os.path.exists(opt.save):
 
 gen = DataGenerator()
 data_dim = gen.start().render().nelement()
-T = 10
 
 KL = GaussianKLD().type(dtype)
 LL = GaussianLL().type(dtype)
@@ -60,7 +60,7 @@ def make_seq(length, dim):
 
 # model = VAEModel(100, gen.size).type(dtype)
 # model = IndependentModel(2, 50, gen.size).type(dtype)
-model = IndependentModel(4, 10, gen.size).type(dtype)
+model = IndependentModel(1, 100, gen.size).type(dtype)
 optimizer = optim.Adam(
     model.parameters(),
     lr=opt.lr)
@@ -101,6 +101,10 @@ for i in range(n_steps):
     loss.backward()
 
     # torch.nn.utils.clip_grad_norm(model.parameters(), 10)
+    sgld = False
+    if sgld:
+        for p in model.parameters():
+            p.grad.data += p.grad.data.clone().normal_(0, optimizer.lr)
     optimizer.step()
 
     progress.update(i%k)
@@ -140,6 +144,13 @@ for i in range(n_steps):
         z_var_min = 1e6
         z_var_max = -1
         progress = progressbar.ProgressBar(max_value=k)
+
+    # learning rate decay
+    # 0.98 every 10K -> ~0.1 at 1,000,000 steps
+    if opt.lr_decay and i % 10000 == 0 and i > 0:
+        optimizer = optim.Adam(
+            model.parameters(),
+            lr=optimizer.lr * 0.98)
 
     if i % 1000 == 0 or i == n_steps - 1:
 
