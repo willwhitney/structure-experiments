@@ -19,17 +19,20 @@ def random_color():
     return color
 
 # fixed_color = [random.uniform(0, 1) for _ in range(3)]
-fixed_color = [1.0 for _ in range(3)]
+fixed_colors = [[1, 0, 1],
+               [0, 1, 1]]
+
 class DataGenerator:
     def __init__(self):
-        self.size = 6
+        self.size = 3
         self.n_things = 2
         self.max_speed = 1
 
-    def make_thing(self):
+    def make_thing(self, color=None):
+        if color is None:
+            color = random_color()
         return Thing(
-            color = fixed_color,
-            # color = random_color(),
+            color = color,
             loc = [random.randint(0, self.size - 1),
                   random.randint(0, self.size - 1)],
             vel = [random.randint(-self.max_speed, self.max_speed),
@@ -46,7 +49,12 @@ class DataGenerator:
                 thing.loc[index] = - thing.loc[index]
 
     def start(self):
-        self.things = [self.make_thing() for i in range(self.n_things)]
+        # different colored balls
+        # self.things = [self.make_thing(fixed_colors[i])
+                    #    for i in range(self.n_things)]
+
+        # all white balls
+        self.things = [self.make_thing([1,1,1]) for i in range(self.n_things)]
         return self
 
     def step(self):

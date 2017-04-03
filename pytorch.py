@@ -58,8 +58,9 @@ def make_seq(length, dim):
     sequence = [Variable(x.type(dtype)) for x in sequence]
     return sequence
 
-model = VAEModel(gen.size).type(dtype)
-# model = IndependentModel(2, gen.size).type(dtype)
+# model = VAEModel(100, gen.size).type(dtype)
+# model = IndependentModel(2, 50, gen.size).type(dtype)
+model = IndependentModel(4, 10, gen.size).type(dtype)
 optimizer = optim.Adam(
     model.parameters(),
     lr=opt.lr)
@@ -68,10 +69,12 @@ print(model)
 
 mean_loss = 0
 mean_divergence = 0
+mean_prior_div = 0
+mean_trans_div = 0
 z_var_means = []
 z_var_min = 1e6
 z_var_max = -1
-n_steps = int(1e6)
+n_steps = int(1e7)
 
 k = 1000
 progress = progressbar.ProgressBar(max_value=k)
@@ -82,9 +85,12 @@ for i in range(n_steps):
     # while len(sequence) < 3:
     #     sequence = make_real_seq(np.random.geometric(0.3))
 
-    generations, loss, divergence, batch_z_vars = model(sequence)
+    generations, loss, divergences, batch_z_vars = model(sequence)
     mean_loss += loss.data[0]
-    mean_divergence += divergence
+    (seq_divergence, seq_prior_div, seq_trans_div) = divergences
+    mean_divergence += seq_divergence
+    mean_prior_div += seq_prior_div
+    mean_trans_div += seq_trans_div
 
     var_min, var_mean, var_max = batch_z_vars
     z_var_means.append(var_mean)
@@ -110,19 +116,26 @@ for i in range(n_steps):
         print(
             ("Step: {:8d}, Loss: {:8.3f}, NLL: {:8.3f}, "
              "Divergence: {:6.3f}, "
-             "z variance [min, mean, max]: [{:6.3f}, {:6.3f}, {:6.3f}], "
+             "Prior divergence: {:6.3f}, "
+             "Transition divergence: {:6.3f}, "
+            #  "z variance [min, mean, max]: [{:6.3f}, {:6.3f}, {:6.3f}], "
              "ms/sequence: {:6.2f}").format(
                 i,
                 mean_loss / k,
                 (mean_loss - mean_divergence) / k,
                 mean_divergence / k,
-                z_var_min,
-                sum(z_var_means) / len(z_var_means),
-                z_var_max,
+                mean_prior_div / k,
+                mean_trans_div / k,
+                # z_var_min,
+                # sum(z_var_means) / len(z_var_means),
+                # z_var_max,
                 elapsed_seconds / k / batch_size * 1000))
 
+        torch.save(model, opt.save + '/model.t7')
         mean_loss = 0
         mean_divergence = 0
+        mean_prior_div = 0
+        mean_trans_div = 0
         z_var_means = []
         z_var_min = 1e6
         z_var_max = -1
@@ -191,3 +204,13 @@ for i in range(n_steps):
                 image = [[x[j].view(3,gen.size,gen.size) for x in sample_row]
                           for sample_row in samples]
                 save_tensors_image(opt.save + '/ind_resample_'+str(j)+'.png', image)
+
+        # save samples interpolating between noise near the current latent
+        if isinstance(model, IndependentModel):
+            samples = model.generate_interpolations(priming, 20)
+            samples = [[x.data for x in sample_row]
+                       for sample_row in samples]
+            for j in range(10):
+                image = [[x[j].view(3,gen.size,gen.size) for x in sample_row]
+                          for sample_row in samples]
+                save_tensors_image(opt.save + '/interp_'+str(j)+'.png', image)

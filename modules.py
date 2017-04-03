@@ -75,7 +75,7 @@ class Generator(nn.Module):
         mu = F.leaky_relu(mu_preactivation)
 
         # sigma = F.sigmoid(self.lin_sigma(current)) + 3e-2
-        sigma = Variable(torch.ones(mu.size()).type_as(mu.data) / 50)
+        sigma = Variable(torch.ones(mu.size()).type_as(mu.data) / 10)
         return (mu, sigma)
 
 class ConvGenerator(nn.Module):
@@ -125,7 +125,7 @@ class ConvGenerator(nn.Module):
         # print(current.size())
         mu = F.leaky_relu(current[:, : int(current.size(1) / 2)])
         # sigma = F.sigmoid(current[:, current.size(1) / 2 :]) + 3e-2
-        sigma = Variable(torch.ones(mu.size()).type_as(mu.data) / 50)
+        sigma = Variable(torch.ones(mu.size()).type_as(mu.data) / 10)
         return (mu, sigma)
 
 class Inference(nn.Module):

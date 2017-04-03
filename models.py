@@ -12,9 +12,9 @@ LL = GaussianLL().type(dtype)
 mse = nn.MSELoss().type(dtype)
 
 class VAEModel(nn.Module):
-    def __init__(self, img_size):
+    def __init__(self, hidden_dim, g_size):
         super(VAEModel, self).__init__()
-        self.hidden_dim = 100
+        self.hidden_dim = hidden_dim
         self.img_size = img_size
 
         self.z1_prior = (
@@ -108,11 +108,11 @@ class VAEModel(nn.Module):
         return generations
 
 class IndependentModel(nn.Module):
-    def __init__(self, n_latents, img_size):
+    def __init__(self, n_latents, hidden_dim, img_size):
         super(IndependentModel, self).__init__()
         self.n_latents = n_latents
         self.img_size = img_size
-        self.hidden_dim = 50
+        self.hidden_dim = hidden_dim
 
         single_z1 = (
             Variable(torch.zeros(batch_size, self.hidden_dim).type(dtype)),
@@ -126,9 +126,9 @@ class IndependentModel(nn.Module):
         image_dim = [3, self.img_size, self.img_size]
         self.transitions = nn.ModuleList([Transition(self.hidden_dim)
                                           for _ in range(n_latents)])
-        # self.first_inference = FirstInference(prod(image_dim), self.hidden_dim)
-        # self.inference = Inference(prod(image_dim), self.hidden_dim)
-        # self.generator = Generator(self.hidden_dim, prod(image_dim))
+        # self.first_inference = FirstInference(prod(image_dim), total_z_dim)
+        # self.inference = Inference(prod(image_dim), total_z_dim)
+        # self.generator = Generator(total_z_dim, prod(image_dim))
 
         self.first_inference = ConvFirstInference(image_dim, total_z_dim)
         self.inference = ConvInference(image_dim, total_z_dim)
@@ -136,8 +136,10 @@ class IndependentModel(nn.Module):
 
     def forward(self, sequence):
         loss = Variable(torch.zeros(1).type(dtype))
-        seq_divergence = Variable(torch.zeros(1).type(dtype),
-                                  requires_grad=False)
+        seq_divergence = Variable(torch.zeros(1).type(dtype))
+        seq_prior_div = Variable(torch.zeros(1).type(dtype))
+        seq_trans_div = Variable(torch.zeros(1).type(dtype))
+
         batch_size = sequence[0].size(0)
         generations = []
 
@@ -156,8 +158,14 @@ class IndependentModel(nn.Module):
         z_var_min = 1e6
         z_var_max = -1
         for t in range(len(sequence)):
+            # import ipdb; ipdb.set_trace()
             divergence = KL(inferred_z_post, cat_prior)
             seq_divergence = seq_divergence + divergence
+            if t == 0:
+                seq_prior_div = seq_prior_div + divergence
+            else:
+                seq_trans_div = seq_trans_div + divergence
+
             loss = loss + divergence
 
             z_sample = sample(inferred_z_post)
@@ -184,10 +192,13 @@ class IndependentModel(nn.Module):
                 z_var_max = max(z_var_max, cat_prior[1].data.max())
 
 
+        seq_divergence = seq_divergence.data[0] / len(sequence)
+        seq_prior_div = seq_prior_div.data[0]
+        seq_trans_div = seq_trans_div.data[0] / (len(sequence) - 1)
         z_var_mean = z_var_mean / (len(sequence) - 1) if len(sequence) > 1 else -1
         return (generations,
                 loss / len(sequence),
-                seq_divergence.data[0] / len(sequence),
+                (seq_divergence, seq_prior_div, seq_trans_div),
                 (z_var_min, z_var_mean, z_var_max))
 
     def generate(self, priming, steps, sampling=True):
@@ -275,6 +286,35 @@ class IndependentModel(nn.Module):
             for t in range(steps - priming_steps):
                 latent[:, z_i*self.hidden_dim : (z_i+1)*self.hidden_dim].data.normal_(0, 1)
 
+                generations[z_i].append(self.generator(latent)[0])
+        return generations
+
+    def generate_interpolations(self, priming, steps):
+        priming_steps = len(priming)
+        generations = [[] for _ in range(self.n_latents)]
+        if isinstance(self.inference, ConvInference):
+            priming = [x.resize(x.size(0), 3, self.img_size, self.img_size)
+                       for x in priming]
+
+        latent = self.first_inference(priming[0])[0]
+
+        generation = self.generator(latent)[0]
+        [generations[i].append(generation) for i in range(len(generations))]
+        for t in range(1, priming_steps):
+            latent = self.inference(priming[t], latent)[0]
+            generation = self.generator(latent)[0]
+            [generations[i].append(generation) for i in range(len(generations))]
+
+        z_const = latent.clone()
+        for z_i in range(self.n_latents):
+            latent = z_const.clone()
+            single_z_const = z_const[:, z_i*self.hidden_dim : (z_i+1)*self.hidden_dim]
+            noise = Variable(
+                torch.zeros(latent.size(0), self.hidden_dim).normal_(0, 1).type(dtype))
+            # single_z = latent[:, z_i*self.hidden_dim : (z_i+1)*self.hidden_dim]
+
+            for alpha in torch.linspace(-1, 1, steps - priming_steps):
+                latent[:, z_i*self.hidden_dim : (z_i+1)*self.hidden_dim] = single_z_const + alpha * noise
                 generations[z_i].append(self.generator(latent)[0])
         return generations
 
