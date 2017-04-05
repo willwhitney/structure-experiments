@@ -23,6 +23,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--name', default=get_gpu())
 parser.add_argument('--lr', default=3e-4, type=float)
 parser.add_argument('--lr_decay', action="store_true")
+parser.add_argument('--sgld', action="store_true")
 opt = parser.parse_args()
 opt.save = 'results/' + opt.name
 
@@ -60,7 +61,7 @@ def make_seq(length, dim):
 
 # model = VAEModel(100, gen.size).type(dtype)
 # model = IndependentModel(2, 50, gen.size).type(dtype)
-model = IndependentModel(1, 100, gen.size).type(dtype)
+model = IndependentModel(4, 25, gen.size).type(dtype)
 optimizer = optim.Adam(
     model.parameters(),
     lr=opt.lr)
@@ -71,6 +72,7 @@ mean_loss = 0
 mean_divergence = 0
 mean_prior_div = 0
 mean_trans_div = 0
+mean_grad_norm = 0
 z_var_means = []
 z_var_min = 1e6
 z_var_max = -1
@@ -100,11 +102,14 @@ for i in range(n_steps):
     model.zero_grad()
     loss.backward()
 
+    mean_grad_norm += grad_norm(model)
+
     # torch.nn.utils.clip_grad_norm(model.parameters(), 10)
-    sgld = False
-    if sgld:
+    if opt.sgld:
         for p in model.parameters():
-            p.grad.data += p.grad.data.clone().normal_(0, optimizer.lr)
+            # import ipdb; ipdb.set_trace()
+            if p.grad is not None:
+                p.grad.data += p.grad.data.clone().normal_(0, opt.lr)
     optimizer.step()
 
     progress.update(i%k)
@@ -121,9 +126,10 @@ for i in range(n_steps):
             ("Step: {:8d}, Loss: {:8.3f}, NLL: {:8.3f}, "
              "Divergence: {:6.3f}, "
              "Prior divergence: {:6.3f}, "
-             "Transition divergence: {:6.3f}, "
+             "Trans divergence: {:6.3f}, "
+             "Grad norm: {:6.3f}, "
             #  "z variance [min, mean, max]: [{:6.3f}, {:6.3f}, {:6.3f}], "
-             "ms/sequence: {:6.2f}").format(
+             "ms/seq: {:6.2f}").format(
                 i,
                 mean_loss / k,
                 (mean_loss - mean_divergence) / k,
@@ -133,6 +139,7 @@ for i in range(n_steps):
                 # z_var_min,
                 # sum(z_var_means) / len(z_var_means),
                 # z_var_max,
+                mean_grad_norm / k,
                 elapsed_seconds / k / batch_size * 1000))
 
         torch.save(model, opt.save + '/model.t7')
@@ -140,17 +147,20 @@ for i in range(n_steps):
         mean_divergence = 0
         mean_prior_div = 0
         mean_trans_div = 0
+        mean_grad_norm = 0
         z_var_means = []
         z_var_min = 1e6
         z_var_max = -1
         progress = progressbar.ProgressBar(max_value=k)
 
     # learning rate decay
-    # 0.98 every 10K -> ~0.1 at 1,000,000 steps
+    # 0.985 every 10K -> ~0.2 at 1,000,000 steps
     if opt.lr_decay and i % 10000 == 0 and i > 0:
+        opt.lr = opt.lr * 0.985
+        print("Decaying learning rate to: ", opt.lr)
         optimizer = optim.Adam(
             model.parameters(),
-            lr=optimizer.lr * 0.98)
+            lr=opt.lr)
 
     if i % 1000 == 0 or i == n_steps - 1:
 

@@ -34,6 +34,9 @@ class Transition(nn.Module):
 
         self.layers = nn.ModuleList([nn.Linear(self.dim, self.dim)
                                      for _ in range(4)])
+        # self.layers = nn.ModuleList([nn.Linear(self.dim, self.dim)
+        #                              for _ in range(2)])
+
         # self.l1 = nn.Linear(self.dim, self.dim)
         self.lin_mu = nn.Linear(self.dim, self.dim)
         self.lin_sigma = nn.Linear(self.dim, self.dim)
@@ -45,6 +48,7 @@ class Transition(nn.Module):
             current = F.tanh(current)
 
         # hidden = F.tanh(self.l1(input))
+        # mu = self.lin_mu(current)
         mu = 10 * F.tanh(self.lin_mu(current) / 10)
         sigma = Variable(torch.ones(mu.size()).type_as(mu.data) / 10)
         # sigma = F.softplus(self.lin_sigma(current)) + 1e-2
@@ -86,6 +90,9 @@ class ConvGenerator(nn.Module):
 
         self.planes = [1, 64, 64, 64, output_dims[0] * 2]
         self.kernels = [None, 3, 3, 3, 3]
+
+        # self.planes = [1, 64, output_dims[0] * 2]
+        # self.kernels = [None, 3, 3]
 
 
         self.in_dims = [output_dims[1:]]
@@ -163,6 +170,10 @@ class ConvInference(nn.Module):
 
         self.planes = [32, 16, 16, 16]
         self.kernels = [3, 3, 3, 3]
+
+        # self.planes = [32, 16]
+        # self.kernels = [3, 3]
+
         self.out_dims = [input_dims]
         for l in range(len(self.planes)):
             in_planes, in_height, in_width = self.out_dims[-1]
@@ -241,6 +252,10 @@ class ConvFirstInference(nn.Module):
 
         self.planes = [32, 16, 16, 16]
         self.kernels = [3, 3, 3, 3]
+
+        # self.planes = [32, 16]
+        # self.kernels = [3, 3]
+        #
         self.out_dims = [input_dims]
         for l in range(len(self.planes)):
             in_planes, in_height, in_width = self.out_dims[-1]

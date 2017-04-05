@@ -204,3 +204,10 @@ def clear_progressbar():
     print("\033[2K")
     # moves up two lines again
     print("\033[2A")
+
+def grad_norm(model):
+    all_grads = [p.grad.data.view(p.grad.data.nelement())
+                 for p in model.parameters()
+                 if p.grad is not None]
+    cat_grads = torch.cat(all_grads, 0)
+    return cat_grads.norm()

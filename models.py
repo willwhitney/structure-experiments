@@ -124,6 +124,8 @@ class IndependentModel(nn.Module):
         total_z_dim = n_latents * self.hidden_dim
 
         image_dim = [3, self.img_size, self.img_size]
+
+        # trans = Transition(self.hidden_dim)
         self.transitions = nn.ModuleList([Transition(self.hidden_dim)
                                           for _ in range(n_latents)])
         # self.first_inference = FirstInference(prod(image_dim), total_z_dim)
