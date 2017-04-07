@@ -61,7 +61,7 @@ def make_seq(length, dim):
 
 # model = VAEModel(100, gen.size).type(dtype)
 # model = IndependentModel(2, 50, gen.size).type(dtype)
-model = IndependentModel(4, 25, gen.size).type(dtype)
+model = IndependentModel(3, 25, gen.size).type(dtype)
 optimizer = optim.Adam(
     model.parameters(),
     lr=opt.lr)

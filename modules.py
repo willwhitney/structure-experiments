@@ -48,8 +48,8 @@ class Transition(nn.Module):
             current = F.tanh(current)
 
         # hidden = F.tanh(self.l1(input))
-        # mu = self.lin_mu(current)
-        mu = 10 * F.tanh(self.lin_mu(current) / 10)
+        mu = self.lin_mu(current)
+        # mu = 10 * F.tanh(self.lin_mu(current) / 10)
         sigma = Variable(torch.ones(mu.size()).type_as(mu.data) / 10)
         # sigma = F.softplus(self.lin_sigma(current)) + 1e-2
         # print(sigma.mean().data[0])

@@ -188,7 +188,11 @@ class IndependentModel(nn.Module):
                 cat_prior = (torch.cat([prior[0] for prior in z_prior], 1),
                              torch.cat([prior[1] for prior in z_prior], 1))
 
+                # give it the sample from z_{t-1}
                 inferred_z_post = self.inference(reshaped_sequence[t+1], z_sample)
+
+                # give it the mean of the prior p(z_t)
+                # inferred_z_post = self.inference(reshaped_sequence[t+1], cat_prior[0])
                 z_var_mean += cat_prior[1].mean().data[0]
                 z_var_min = min(z_var_min, cat_prior[1].data.min())
                 z_var_max = max(z_var_max, cat_prior[1].data.max())

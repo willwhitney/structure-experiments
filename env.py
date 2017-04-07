@@ -20,12 +20,14 @@ def random_color():
 
 # fixed_color = [random.uniform(0, 1) for _ in range(3)]
 fixed_colors = [[1, 0, 1],
-               [0, 1, 1]]
+                [0, 1, 1],
+                [1, 1, 0],
+                [0, 1, 0]]
 
 class DataGenerator:
     def __init__(self):
         self.size = 3
-        self.n_things = 2
+        self.n_things = 1
         self.max_speed = 1
 
     def make_thing(self, color=None):
@@ -48,13 +50,22 @@ class DataGenerator:
                 thing.vel[index] = - thing.vel[index]
                 thing.loc[index] = - thing.loc[index]
 
+    def increment_color(self, thing):
+        color_index = fixed_colors.index(thing.color)
+        new_color_index = (color_index + 1) % len(fixed_colors)
+        thing.color = fixed_colors[new_color_index]
+
     def start(self):
+        # random colored balls
+        self.things = [self.make_thing(random.choice(fixed_colors))
+                       for i in range(self.n_things)]
+
         # different colored balls
         # self.things = [self.make_thing(fixed_colors[i])
-                    #    for i in range(self.n_things)]
+        #                for i in range(self.n_things)]
 
         # all white balls
-        self.things = [self.make_thing([1,1,1]) for i in range(self.n_things)]
+        # self.things = [self.make_thing([1,1,1]) for i in range(self.n_things)]
         return self
 
     def step(self):
@@ -62,6 +73,7 @@ class DataGenerator:
         for thing in self.things:
             thing.loc = [thing.loc[i] + thing.vel[i] for i in range(2)]
             self.bounce(thing)
+            self.increment_color(thing)
         return self
 
     def render(self):
