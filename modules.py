@@ -6,6 +6,7 @@ from torch.autograd import Variable
 import math
 
 from util import *
+from params import *
 
 def conv_out_dim(in_planes, out_planes, in_height, in_width, kernel_size,
                  stride=1, padding=0, dilation=1):
@@ -25,6 +26,13 @@ def conv_in_dim(out_height, out_width, kernel_size,
     in_width = math.ceil(
         (out_width - 1) * stride - 2 * padding + dilated_kernel + 1)
     return in_height, in_width
+
+if opt.activation == 'lrelu':
+    activation = F.leaky_relu
+elif opt.activation == 'tanh':
+    activation = F.tanh
+else:
+    raise Exception("Activation was not specified properly.")
 
 eps = 1e-2
 class Transition(nn.Module):
@@ -122,17 +130,17 @@ class ConvGenerator(nn.Module):
         current = input
         for lin in self.lins:
             current = lin(current)
-            current = F.tanh(current)
+            current = activation(current)
 
         current = current.resize(current.size(0), 1, *self.in_dims[0])
         for conv in self.convs:
-            current = F.tanh(current)
+            current = activation(current)
             current = conv(current)
 
         # print(current.size())
         mu = F.leaky_relu(current[:, : int(current.size(1) / 2)])
         # sigma = F.sigmoid(current[:, current.size(1) / 2 :]) + 3e-2
-        sigma = Variable(torch.ones(mu.size()).type_as(mu.data) / 10)
+        sigma = Variable(torch.ones(mu.size()).type_as(mu.data) * 0.01)
         return (mu, sigma)
 
 class Inference(nn.Module):
@@ -208,15 +216,16 @@ class ConvInference(nn.Module):
         current = x_t
         for conv in self.convs:
             current = conv(current)
-            current = F.tanh(current)
+            current = activation(current)
         current = current.resize(current.size(0), prod(self.out_dims[-1]))
         current = self.input_lin(current)
-        current = F.tanh(current)
+        current = activation(current)
 
         joined = torch.cat([current, z_prev], 1)
-        new_hidden = F.tanh(self.joint_lin(joined))
+        new_hidden = activation(self.joint_lin(joined))
 
-        mu = 10 * F.tanh(self.lin_mu(new_hidden) / 10)
+        # mu = 10 * F.tanh(self.lin_mu(new_hidden) / 10)
+        mu = self.lin_mu(new_hidden)
         sigma = F.sigmoid(self.lin_sigma(new_hidden)) + eps
         return (mu, sigma)
 
@@ -287,15 +296,16 @@ class ConvFirstInference(nn.Module):
         current = x_t
         for conv in self.convs:
             current = conv(current)
-            current = F.tanh(current)
+            current = activation(current)
         current = current.resize(current.size(0), prod(self.out_dims[-1]))
         current = self.input_lin(current)
-        new_hidden = F.tanh(current)
+        new_hidden = activation(current)
 
         # joined = torch.cat([current, z_prev], 1)
         # new_hidden = F.tanh(self.joint_lin(joined))
 
-        mu = 10 * F.tanh(self.lin_mu(new_hidden) / 10)
+        # mu = 10 * F.tanh(self.lin_mu(new_hidden) / 10)
+        mu = self.lin_mu(new_hidden)
         sigma = F.sigmoid(self.lin_sigma(new_hidden)) + eps
         return (mu, sigma)
 

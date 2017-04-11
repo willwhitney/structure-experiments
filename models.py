@@ -136,11 +136,23 @@ class IndependentModel(nn.Module):
         self.inference = ConvInference(image_dim, total_z_dim)
         self.generator = ConvGenerator(total_z_dim, image_dim)
 
+    def predict_latent(self, latent):
+        z_prior = []
+        for i, trans in enumerate(self.transitions):
+            previous = latent[:, i*self.hidden_dim : (i+1)*self.hidden_dim]
+            z_prior.append(trans(previous))
+
+        cat_prior = (torch.cat([prior[0] for prior in z_prior], 1),
+                     torch.cat([prior[1] for prior in z_prior], 1))
+        return cat_prior
+
     def forward(self, sequence):
-        loss = Variable(torch.zeros(1).type(dtype))
+        # loss = Variable(torch.zeros(1).type(dtype))
         seq_divergence = Variable(torch.zeros(1).type(dtype))
         seq_prior_div = Variable(torch.zeros(1).type(dtype))
         seq_trans_div = Variable(torch.zeros(1).type(dtype))
+
+        seq_nll = Variable(torch.zeros(1).type(dtype))
 
         batch_size = sequence[0].size(0)
         generations = []
@@ -159,6 +171,7 @@ class IndependentModel(nn.Module):
         z_var_mean = 0
         z_var_min = 1e6
         z_var_max = -1
+
         for t in range(len(sequence)):
             # import ipdb; ipdb.set_trace()
             divergence = KL(inferred_z_post, cat_prior)
@@ -168,67 +181,58 @@ class IndependentModel(nn.Module):
             else:
                 seq_trans_div = seq_trans_div + divergence
 
-            loss = loss + divergence
+            # loss = loss + divergence
 
             z_sample = sample(inferred_z_post)
             # z_sample = inferred_z_post[0]
 
             gen_dist = self.generator(z_sample)
             log_likelihood = LL(gen_dist, reshaped_sequence[t])
-            loss = loss - log_likelihood
+            seq_nll = seq_nll - log_likelihood
 
             generations.append(gen_dist)
 
             if t < len(sequence) - 1:
-                z_prior = []
-                for i, trans in enumerate(self.transitions):
-                    previous = z_sample[:, i*self.hidden_dim : (i+1)*self.hidden_dim]
-                    z_prior.append(trans(previous))
-
-                cat_prior = (torch.cat([prior[0] for prior in z_prior], 1),
-                             torch.cat([prior[1] for prior in z_prior], 1))
+                cat_prior = self.predict_latent(z_sample)
 
                 # give it the sample from z_{t-1}
-                inferred_z_post = self.inference(reshaped_sequence[t+1], z_sample)
+                # inferred_z_post = self.inference(reshaped_sequence[t+1], z_sample)
 
-                # give it the mean of the prior p(z_t)
-                # inferred_z_post = self.inference(reshaped_sequence[t+1], cat_prior[0])
+                # give it the mean of the prior p(z_t | z_{t-1})
+                inferred_z_post = self.inference(reshaped_sequence[t+1], cat_prior[0])
                 z_var_mean += cat_prior[1].mean().data[0]
                 z_var_min = min(z_var_min, cat_prior[1].data.min())
                 z_var_max = max(z_var_max, cat_prior[1].data.max())
 
-
-        seq_divergence = seq_divergence.data[0] / len(sequence)
-        seq_prior_div = seq_prior_div.data[0]
-        seq_trans_div = seq_trans_div.data[0] / (len(sequence) - 1)
+        seq_divergence = seq_divergence / len(sequence)
+        seq_prior_div = seq_prior_div
+        seq_trans_div = seq_trans_div / (len(sequence) - 1)
         z_var_mean = z_var_mean / (len(sequence) - 1) if len(sequence) > 1 else -1
         return (generations,
-                loss / len(sequence),
-                (seq_divergence, seq_prior_div, seq_trans_div),
-                (z_var_min, z_var_mean, z_var_max))
+                # loss / len(sequence),
+                seq_nll / len(sequence),
+                (seq_divergence, seq_prior_div, seq_trans_div))
+                # (z_var_min, z_var_mean, z_var_max))
 
     def generate(self, priming, steps, sampling=True):
         priming_steps = len(priming)
-        generations = []
+        # generations = []
 
         if isinstance(self.inference, ConvInference):
-            priming = [x.resize(x.size(0),  3, self.img_size, self.img_size)
+            priming = [x.resize(x.size(0), 3, self.img_size, self.img_size)
                        for x in priming]
 
+        generations = [p.clone() for p in priming]
         latent = self.first_inference(priming[0])[0]
-        generations.append(self.generator(latent)[0])
+        # generations.append(self.generator(latent)[0])
         for t in range(1, priming_steps):
-            latent = self.inference(priming[t], latent)[0]
-            generations.append(self.generator(latent)[0])
+            latent = self.inference(priming[t],
+                                    self.predict_latent(latent)[0])[0]
+            # generations.append(self.generator(latent)[0])
 
         for t in range(steps - priming_steps):
             # make a transition
-            z_prior = []
-            for i, trans in enumerate(self.transitions):
-                previous = latent[:, i*self.hidden_dim : (i+1)*self.hidden_dim]
-                z_prior.append(trans(previous))
-            latent_dist = (torch.cat([prior[0] for prior in z_prior], 1),
-                           torch.cat([prior[1] for prior in z_prior], 1))
+            latent_dist = self.predict_latent(latent)
 
             if sampling:
                 latent = sample(latent_dist)
@@ -239,19 +243,22 @@ class IndependentModel(nn.Module):
 
     def generate_independent(self, priming, steps, sampling=True):
         priming_steps = len(priming)
-        generations = [[] for _ in range(self.n_latents)]
 
         if isinstance(self.inference, ConvInference):
             priming = [x.resize(x.size(0),  3, self.img_size, self.img_size)
                        for x in priming]
 
+        generations = [[p.clone() for p in priming]
+                       for _ in range(self.n_latents)]
+
         latent = self.first_inference(priming[0])[0]
-        generation = self.generator(latent)[0]
-        [generations[i].append(generation) for i in range(len(generations))]
+        # generation = self.generator(latent)[0]
+        # [generations[i].append(generation) for i in range(len(generations))]
         for t in range(1, priming_steps):
-            latent = self.inference(priming[t], latent)[0]
-            generation = self.generator(latent)[0]
-            [generations[i].append(generation) for i in range(len(generations))]
+            latent = self.inference(priming[t],
+                                    self.predict_latent(latent)[0])[0]
+            # generation = self.generator(latent)[0]
+            # [generations[i].append(generation) for i in range(len(generations))]
 
         starting_latent = latent.clone()
         for z_i in range(self.n_latents):
@@ -272,19 +279,22 @@ class IndependentModel(nn.Module):
 
     def generate_variations(self, priming, steps):
         priming_steps = len(priming)
-        generations = [[] for _ in range(self.n_latents)]
+        # generations = [[] for _ in range(self.n_latents)]
 
         if isinstance(self.inference, ConvInference):
             priming = [x.resize(x.size(0), 3, self.img_size, self.img_size)
                        for x in priming]
 
+        generations = [[p.clone() for p in priming]
+                       for _ in range(self.n_latents)]
         latent = self.first_inference(priming[0])[0]
-        generation = self.generator(latent)[0]
-        [generations[i].append(generation) for i in range(len(generations))]
+        # generation = self.generator(latent)[0]
+        # [generations[i].append(generation) for i in range(len(generations))]
         for t in range(1, priming_steps):
-            latent = self.inference(priming[t], latent)[0]
-            generation = self.generator(latent)[0]
-            [generations[i].append(generation) for i in range(len(generations))]
+            latent = self.inference(priming[t],
+                                    self.predict_latent(latent)[0])[0]
+            # generation = self.generator(latent)[0]
+            # [generations[i].append(generation) for i in range(len(generations))]
 
         starting_latent = latent.clone()
         for z_i in range(self.n_latents):
@@ -297,19 +307,21 @@ class IndependentModel(nn.Module):
 
     def generate_interpolations(self, priming, steps):
         priming_steps = len(priming)
-        generations = [[] for _ in range(self.n_latents)]
+        # generations = [[] for _ in range(self.n_latents)]
         if isinstance(self.inference, ConvInference):
             priming = [x.resize(x.size(0), 3, self.img_size, self.img_size)
                        for x in priming]
 
+        generations = [[p.clone() for p in priming]
+                       for _ in range(self.n_latents)]
         latent = self.first_inference(priming[0])[0]
-
-        generation = self.generator(latent)[0]
-        [generations[i].append(generation) for i in range(len(generations))]
+        # generation = self.generator(latent)[0]
+        # [generations[i].append(generation) for i in range(len(generations))]
         for t in range(1, priming_steps):
-            latent = self.inference(priming[t], latent)[0]
-            generation = self.generator(latent)[0]
-            [generations[i].append(generation) for i in range(len(generations))]
+            latent = self.inference(priming[t],
+                                    self.predict_latent(latent)[0])[0]
+            # generation = self.generator(latent)[0]
+            # [generations[i].append(generation) for i in range(len(generations))]
 
         z_const = latent.clone()
         for z_i in range(self.n_latents):

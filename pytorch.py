@@ -10,22 +10,16 @@ import random
 import math
 import os
 from PIL import Image
-import argparse
 import progressbar
+import logging
+
+from util import *
 
 from modules import *
 from models import *
 from env import *
-from util import *
 from params import *
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--name', default=get_gpu())
-parser.add_argument('--lr', default=3e-4, type=float)
-parser.add_argument('--lr_decay', action="store_true")
-parser.add_argument('--sgld', action="store_true")
-opt = parser.parse_args()
-opt.save = 'results/' + opt.name
 
 print("Tensor type: ", dtype)
 
@@ -33,6 +27,11 @@ print("Tensor type: ", dtype)
 if not os.path.exists(opt.save):
     os.makedirs(opt.save)
 
+logging.basicConfig(filename = opt.save + "/results.csv",
+                    level = logging.DEBUG,
+                    format = "%(message)s")
+logging.debug(("Step, Loss, NLL, Divergence, Prior divergence, "
+               "Trans divergence, Grad norm, ms/seq"))
 
 gen = DataGenerator()
 data_dim = gen.start().render().nelement()
@@ -60,9 +59,10 @@ def make_seq(length, dim):
     return sequence
 
 # model = VAEModel(100, gen.size).type(dtype)
-# model = IndependentModel(2, 50, gen.size).type(dtype)
 model = IndependentModel(3, 25, gen.size).type(dtype)
+# model = IndependentModel(3, 25, gen.size).type(dtype)
 optimizer = optim.Adam(
+# optimizer = optim.RMSprop(
     model.parameters(),
     lr=opt.lr)
 
@@ -70,6 +70,7 @@ print(model)
 
 mean_loss = 0
 mean_divergence = 0
+mean_nll = 0
 mean_prior_div = 0
 mean_trans_div = 0
 mean_grad_norm = 0
@@ -87,17 +88,25 @@ for i in range(n_steps):
     # while len(sequence) < 3:
     #     sequence = make_real_seq(np.random.geometric(0.3))
 
-    generations, loss, divergences, batch_z_vars = model(sequence)
-    mean_loss += loss.data[0]
+    generations, nll, divergences = model(sequence)
     (seq_divergence, seq_prior_div, seq_trans_div) = divergences
-    mean_divergence += seq_divergence
-    mean_prior_div += seq_prior_div
-    mean_trans_div += seq_trans_div
+    mean_divergence += seq_divergence.data[0]
+    mean_prior_div += seq_prior_div.data[0]
+    mean_trans_div += seq_trans_div.data[0]
+    mean_nll += nll.data[0]
 
-    var_min, var_mean, var_max = batch_z_vars
-    z_var_means.append(var_mean)
-    z_var_min = min(var_min, z_var_min)
-    z_var_max = max(var_max, z_var_max)
+    # var_min, var_mean, var_max = batch_z_vars
+    # z_var_means.append(var_mean)
+    # z_var_min = min(var_min, z_var_min)
+    # z_var_max = max(var_max, z_var_max)
+
+    if not opt.no_kl_annealing:
+        kl_penalty = max(0, min(i / 100000, 1)) * seq_divergence
+    else:
+        kl_penalty = seq_divergence
+
+    loss = nll + kl_penalty
+    mean_loss += loss.data[0]
 
     model.zero_grad()
     loss.backward()
@@ -120,27 +129,23 @@ for i in range(n_steps):
         elapsed_time = progress.end_time - progress.start_time
         elapsed_seconds = elapsed_time.total_seconds()
 
-        if len(z_var_means) == 0:
-            z_var_means = [-1]
-        print(
-            ("Step: {:8d}, Loss: {:8.3f}, NLL: {:8.3f}, "
-             "Divergence: {:6.3f}, "
-             "Prior divergence: {:6.3f}, "
-             "Trans divergence: {:6.3f}, "
-             "Grad norm: {:6.3f}, "
-            #  "z variance [min, mean, max]: [{:6.3f}, {:6.3f}, {:6.3f}], "
-             "ms/seq: {:6.2f}").format(
-                i,
-                mean_loss / k,
-                (mean_loss - mean_divergence) / k,
-                mean_divergence / k,
-                mean_prior_div / k,
-                mean_trans_div / k,
-                # z_var_min,
-                # sum(z_var_means) / len(z_var_means),
-                # z_var_max,
-                mean_grad_norm / k,
-                elapsed_seconds / k / batch_size * 1000))
+        log_values = (i,
+                      mean_loss / k,
+                      mean_nll / k,
+                      mean_divergence / k,
+                      mean_prior_div / k,
+                      mean_trans_div / k,
+                      mean_grad_norm / k,
+                      elapsed_seconds / k / batch_size * 1000)
+        print(("Step: {:8d}, Loss: {:8.3f}, NLL: {:8.3f}, "
+               "Divergence: {:6.3f}, "
+               "Prior divergence: {:6.3f}, "
+               "Trans divergence: {:6.3f}, "
+               "Grad norm: {:7.3f}, "
+               "ms/seq: {:6.2f}").format(*log_values)
+
+        # make list of n copies of format string, stitch them together, format
+        logging.debug(",".join(["{:.8e}"]*len(log_values)).format(*log_values))
 
         torch.save(model, opt.save + '/model.t7')
         mean_loss = 0
@@ -148,9 +153,7 @@ for i in range(n_steps):
         mean_prior_div = 0
         mean_trans_div = 0
         mean_grad_norm = 0
-        z_var_means = []
-        z_var_min = 1e6
-        z_var_max = -1
+        mean_nll = 0
         progress = progressbar.ProgressBar(max_value=k)
 
     # learning rate decay
@@ -162,7 +165,7 @@ for i in range(n_steps):
             model.parameters(),
             lr=opt.lr)
 
-    if i % 1000 == 0 or i == n_steps - 1:
+    if i % k == 0 or i == n_steps - 1:
 
         # save some results from the latest batch
         mus_data = [gen[0].data for gen in generations]
