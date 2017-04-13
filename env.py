@@ -6,6 +6,8 @@ import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
 
+from params import *
+
 class Thing:
     def __init__(self, color, loc, vel):
         self.color = color
@@ -27,10 +29,11 @@ fixed_colors = [[1, 0, 0],
 class DataGenerator:
     def __init__(self):
         self.size = 6
-        self.n_things = 1
+        self.n_things = opt.balls
         self.max_speed = 1
 
-        self.colors = 'vary'
+        self.colors = opt.colors
+        # 'vary'
         # self.colors = 'random'
         # self.colors = 'white'
 

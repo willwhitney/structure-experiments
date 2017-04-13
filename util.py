@@ -211,3 +211,7 @@ def grad_norm(model):
                  if p.grad is not None]
     cat_grads = torch.cat(all_grads, 0)
     return cat_grads.norm()
+
+def set_lr(optimizer, lr):
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr

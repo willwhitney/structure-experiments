@@ -140,7 +140,7 @@ class ConvGenerator(nn.Module):
         # print(current.size())
         mu = F.leaky_relu(current[:, : int(current.size(1) / 2)])
         # sigma = F.sigmoid(current[:, current.size(1) / 2 :]) + 3e-2
-        sigma = Variable(torch.ones(mu.size()).type_as(mu.data) * 0.01)
+        sigma = Variable(torch.ones(mu.size()).type(dtype) * opt.output_var)
         return (mu, sigma)
 
 class Inference(nn.Module):

@@ -23,15 +23,11 @@ from params import *
 
 print("Tensor type: ", dtype)
 
-# name = os.environ['CUDA_VISIBLE_DEVICES'] if name not in locals()
-if not os.path.exists(opt.save):
-    os.makedirs(opt.save)
-
 logging.basicConfig(filename = opt.save + "/results.csv",
                     level = logging.DEBUG,
                     format = "%(message)s")
-logging.debug(("Step, Loss, NLL, Divergence, Prior divergence, "
-               "Trans divergence, Grad norm, ms/seq"))
+logging.debug(("step,loss,nll,divergence,prior divergence,"
+               "trans divergence,grad norm,ms/seq"))
 
 gen = DataGenerator()
 data_dim = gen.start().render().nelement()
@@ -59,8 +55,8 @@ def make_seq(length, dim):
     return sequence
 
 # model = VAEModel(100, gen.size).type(dtype)
-model = IndependentModel(3, 25, gen.size).type(dtype)
-# model = IndependentModel(3, 25, gen.size).type(dtype)
+# model = IndependentModel(3, 10, gen.size).type(dtype)
+model = IndependentModel(opt.latents, opt.latent_dim, gen.size).type(dtype)
 optimizer = optim.Adam(
 # optimizer = optim.RMSprop(
     model.parameters(),
@@ -114,7 +110,7 @@ for i in range(n_steps):
     mean_grad_norm += grad_norm(model)
 
     # torch.nn.utils.clip_grad_norm(model.parameters(), 10)
-    if opt.sgld:
+    if not opt.no_sgld:
         for p in model.parameters():
             # import ipdb; ipdb.set_trace()
             if p.grad is not None:
@@ -142,7 +138,7 @@ for i in range(n_steps):
                "Prior divergence: {:6.3f}, "
                "Trans divergence: {:6.3f}, "
                "Grad norm: {:7.3f}, "
-               "ms/seq: {:6.2f}").format(*log_values)
+               "ms/seq: {:6.2f}").format(*log_values))
 
         # make list of n copies of format string, stitch them together, format
         logging.debug(",".join(["{:.8e}"]*len(log_values)).format(*log_values))
@@ -158,12 +154,13 @@ for i in range(n_steps):
 
     # learning rate decay
     # 0.985 every 10K -> ~0.2 at 1,000,000 steps
-    if opt.lr_decay and i % 10000 == 0 and i > 0:
+    if not opt.no_lr_decay and i % 10000 == 0 and i > 0:
         opt.lr = opt.lr * 0.985
         print("Decaying learning rate to: ", opt.lr)
-        optimizer = optim.Adam(
-            model.parameters(),
-            lr=opt.lr)
+        set_lr(optimizer, opt.lr)
+        # optimizer = optim.Adam(
+        #     model.parameters(),
+        #     lr=opt.lr)
 
     if i % k == 0 or i == n_steps - 1:
 
