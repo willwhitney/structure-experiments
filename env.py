@@ -21,14 +21,15 @@ def random_color():
     return list(color)
 
 # fixed_color = [random.uniform(0, 1) for _ in range(3)]
-fixed_colors = [[1, 0, 0],
+fixed_colors = [[0, 0, 1],
                 [0, 1, 0],
-                [0, 0, 1]]
+                [1, 0, 0]]
 # fixed_colors = [random_color() for _ in range(4)]
 
 class DataGenerator:
     def __init__(self):
         self.size = 6
+        self.image_size = [3, self.size, self.size]
         self.n_things = opt.balls
         self.max_speed = 1
 

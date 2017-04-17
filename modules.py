@@ -96,7 +96,9 @@ class ConvGenerator(nn.Module):
         self.hidden_dim = hidden_dim
         self.output_dims = output_dims
 
-        self.planes = [1, 64, 64, 64, output_dims[0] * 2]
+        # self.planes[0] will be set automatically so that it is
+        # similar to but larger than hidden_dim
+        self.planes = [None, 64, 64, 64, output_dims[0] * 2]
         self.kernels = [None, 3, 3, 3, 3]
 
         # self.planes = [1, 64, output_dims[0] * 2]
@@ -104,16 +106,20 @@ class ConvGenerator(nn.Module):
 
 
         self.in_dims = [output_dims[1:]]
-        for l in range(len(self.planes)-1, 0, -1):
+        for l in range(len(self.planes) - 1, 0, -1):
             # l = l_dumb - 1
             in_dim = conv_in_dim(*self.in_dims[0],
                                  self.kernels[l],
                                  padding=1)
+            in_dim = list(int(d / 2) for d in in_dim)
             self.in_dims = [in_dim] + self.in_dims
 
+        self.planes[0] = math.ceil(hidden_dim / prod(self.in_dims[0]))
         self.lins = nn.ModuleList([
-            # nn.Linear(hidden_dim, hidden_dim),
-            nn.Linear(hidden_dim, prod(self.in_dims[0]))])
+            nn.Linear(hidden_dim, self.planes[0] * prod(self.in_dims[0]))])
+        # import pdb; pdb.set_trace()
+
+        self.upsample = nn.UpsamplingNearest2d(scale_factor=2)
         self.convs = nn.ModuleList()
 
         print(self.in_dims)
@@ -132,9 +138,12 @@ class ConvGenerator(nn.Module):
             current = lin(current)
             current = activation(current)
 
-        current = current.resize(current.size(0), 1, *self.in_dims[0])
+        current = current.resize(current.size(0),
+                                 self.planes[0],
+                                 *self.in_dims[0])
         for conv in self.convs:
             current = activation(current)
+            current = self.upsample(current)
             current = conv(current)
 
         # print(current.size())
@@ -176,7 +185,7 @@ class ConvInference(nn.Module):
         self.input_dims = input_dims
         self.hidden_dim = hidden_dim
 
-        self.planes = [32, 16, 16, 16]
+        self.planes = [128, 64, 64, 16]
         self.kernels = [3, 3, 3, 3]
 
         # self.planes = [32, 16]
@@ -191,14 +200,16 @@ class ConvInference(nn.Module):
                 in_height,
                 in_width,
                 self.kernels[l],
-                padding=1)))
+                padding=1,
+                stride=2)))
         self.convs = nn.ModuleList()
         for l in range(len(self.planes)):
             # confusingly this is actually offset by 1
             in_planes, in_height, in_width = self.out_dims[l]
 
             self.convs.append(nn.Conv2d(
-                in_planes, self.planes[l], self.kernels[l], padding=1))
+                in_planes, self.planes[l], self.kernels[l], padding=1,
+                stride=2))
 
         # self.conv1 = nn.Conv2d(input_dims[0], 32, 3)
 
@@ -259,7 +270,7 @@ class ConvFirstInference(nn.Module):
         self.input_dims = input_dims
         self.hidden_dim = hidden_dim
 
-        self.planes = [32, 16, 16, 16]
+        self.planes = [128, 64, 64, 16]
         self.kernels = [3, 3, 3, 3]
 
         # self.planes = [32, 16]
@@ -273,14 +284,16 @@ class ConvFirstInference(nn.Module):
                                                in_height,
                                                in_width,
                                                self.kernels[l],
-                                               padding=1)))
+                                               padding=1,
+                                               stride=2)))
         self.convs = nn.ModuleList()
         for l in range(len(self.planes)):
             # confusingly this is actually offset by 1
             in_planes, in_height, in_width = self.out_dims[l]
 
             self.convs.append(nn.Conv2d(
-                in_planes, self.planes[l], self.kernels[l], padding=1))
+                in_planes, self.planes[l], self.kernels[l], padding=1,
+                stride=2))
 
         # self.conv1 = nn.Conv2d(input_dims[0], 32, 3)
         self.input_lin = nn.Linear(prod(self.out_dims[-1]), hidden_dim)

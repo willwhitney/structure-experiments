@@ -173,7 +173,6 @@ class IndependentModel(nn.Module):
         z_var_max = -1
 
         for t in range(len(sequence)):
-            # import ipdb; ipdb.set_trace()
             divergence = KL(inferred_z_post, cat_prior)
             seq_divergence = seq_divergence + divergence
             if t == 0:
@@ -199,7 +198,8 @@ class IndependentModel(nn.Module):
                 # inferred_z_post = self.inference(reshaped_sequence[t+1], z_sample)
 
                 # give it the mean of the prior p(z_t | z_{t-1})
-                inferred_z_post = self.inference(reshaped_sequence[t+1], cat_prior[0])
+                inferred_z_post = self.inference(reshaped_sequence[t+1],
+                                                 cat_prior[0])
                 z_var_mean += cat_prior[1].mean().data[0]
                 z_var_min = min(z_var_min, cat_prior[1].data.min())
                 z_var_max = max(z_var_max, cat_prior[1].data.max())
@@ -207,7 +207,10 @@ class IndependentModel(nn.Module):
         seq_divergence = seq_divergence / len(sequence)
         seq_prior_div = seq_prior_div
         seq_trans_div = seq_trans_div / (len(sequence) - 1)
-        z_var_mean = z_var_mean / (len(sequence) - 1) if len(sequence) > 1 else -1
+        if len(sequence) > 1:
+            z_var_mean = z_var_mean / (len(sequence) - 1)
+        else:
+            z_var_mean = -1
         return (generations,
                 # loss / len(sequence),
                 seq_nll / len(sequence),
