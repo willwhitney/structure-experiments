@@ -27,6 +27,8 @@ parser.add_argument('--output_var', default=0.01, type=float)
 parser.add_argument('--latents', default=3, type=int)
 parser.add_argument('--latent_dim', default=25, type=int)
 
+parser.add_argument('--game', default='freeway')
+
 parser.add_argument('--colors', default='white',
                     help="color of bouncing balls. white | vary | random")
 parser.add_argument('--balls', default=1, type=int,

@@ -327,11 +327,12 @@ class IndependentModel(nn.Module):
             # [generations[i].append(generation) for i in range(len(generations))]
 
         z_const = latent.clone()
+        noise = Variable(torch.zeros(
+            latent.size(0), self.hidden_dim).normal_(0, 1).type(dtype))
         for z_i in range(self.n_latents):
             latent = z_const.clone()
             single_z_const = z_const[:, z_i*self.hidden_dim : (z_i+1)*self.hidden_dim]
-            noise = Variable(
-                torch.zeros(latent.size(0), self.hidden_dim).normal_(0, 1).type(dtype))
+
             # single_z = latent[:, z_i*self.hidden_dim : (z_i+1)*self.hidden_dim]
 
             for alpha in torch.linspace(-1, 1, steps - priming_steps):

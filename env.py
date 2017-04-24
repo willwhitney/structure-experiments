@@ -4,7 +4,7 @@ import random
 import numpy as np
 
 from PIL import Image
-import matplotlib.pyplot as plt
+
 
 from params import *
 
@@ -96,9 +96,6 @@ class DataGenerator:
             canvas[:, thing.loc[0], thing.loc[1]] = torch.Tensor(thing.color)
         return canvas
 
-def show(tensor):
-    plt.figure()
-    return plt.imshow(tensor.numpy())
 
 # gen = DataGenerator()
 # gen.start()

@@ -4,6 +4,7 @@ import scipy.misc
 import functools
 import os
 import math
+import matplotlib.pyplot as plt
 
 def is_sequence(arg):
     return (not hasattr(arg, "strip") and
@@ -215,3 +216,13 @@ def grad_norm(model):
 def set_lr(optimizer, lr):
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
+
+# def jupyter_show(tensor):
+    # plt.figure()
+    # return plt.imshow(tensor.numpy())
+
+def show(img_tensor):
+    output_tensor = img_tensor.transpose(0,1).transpose(1,2)
+    plt.figure()
+    plt.imshow(output_tensor.numpy())
+    plt.show()

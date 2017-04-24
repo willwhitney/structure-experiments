@@ -14,21 +14,31 @@ class AtariData(Dataset):
             ))
         self.image_size = [3, 64, 64]
 
+        self.loaded = {}
+
     # def __getitem__(self, i):
     #     return torch.rand(5, 3, 64, 64).type(self.dtype)
 
     def __getitem__(self, i):
+        if i in self.loaded:
+            # print('cache!')
+            return self.loaded[i]
         raw = load_lua(self.filenames[i])
         result = torch.Tensor(self.seq_len, *self.image_size)
         for t in range(self.seq_len):
-            np_resized = scipy.misc.imresize(raw[t].numpy(),
+            skipped_t = t * 5
+            np_resized = scipy.misc.imresize(raw[skipped_t].numpy(),
                                              self.image_size[1:])
             resized = torch.from_numpy(np_resized)
-            resized.transpose_(1, 2).transpose_(0,1)
+            resized.transpose_(1, 2).transpose_(0, 1)
             result[t].copy_(resized)
-        return result / 256
+        result = result / 256
+        self.loaded[i] = result
+        # print(self.loaded.keys())
+        return result
 
     def __len__(self):
+        # return 10
         return len(self.filenames)
 
 # d = AtariData('freeway', 'train', 5, torch.cuda.FloatTensor)

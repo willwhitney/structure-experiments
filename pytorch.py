@@ -21,7 +21,7 @@ from models import *
 from env import *
 from params import *
 from atari_dataset import AtariData
-
+from video_dataset import VideoData
 
 print("Tensor type: ", dtype)
 
@@ -34,9 +34,10 @@ logging.debug(("step,loss,nll,divergence,prior divergence,"
 # gen = DataGenerator()
 # data_dim = gen.start().render().nelement()
 
-train_dataset = AtariData('freeway', 'train', 5)
+# train_dataset = AtariData(opt.game, 'train', 5)
+train_dataset = VideoData('/speedy/data/urban', 5)
 train_loader = DataLoader(train_dataset,
-                          num_workers=10,
+                          num_workers=0,
                           batch_size=batch_size,
                           shuffle=True)
                         #   drop_last=True)
