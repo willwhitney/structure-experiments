@@ -10,7 +10,7 @@ class VideoData(Dataset):
     def __init__(self, directory, seq_len):
         self.seq_len = seq_len
         self.filenames = glob.glob("{}/*.MP4".format(directory))
-        self.image_size = [3, 64, 64]
+        self.image_size = [3, 128, 128]
 
         self.loaded = {}
 

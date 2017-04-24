@@ -98,7 +98,7 @@ class ConvGenerator(nn.Module):
 
         # self.planes[0] will be set automatically so that it is
         # similar to but larger than hidden_dim
-        self.planes = [None, 64, 64, 64, output_dims[0] * 2]
+        self.planes = [None, 64, 64, 128, output_dims[0] * 2]
         self.kernels = [None, 3, 3, 3, 3]
 
         # self.planes = [1, 64, output_dims[0] * 2]
@@ -185,8 +185,8 @@ class ConvInference(nn.Module):
         self.input_dims = input_dims
         self.hidden_dim = hidden_dim
 
-        self.planes = [128, 64, 64, 16]
-        self.kernels = [3, 3, 3, 3]
+        self.planes = [128, 64, 64, 16, 16]
+        self.kernels = [3, 3, 3, 3, 3]
 
         # self.planes = [32, 16]
         # self.kernels = [3, 3]
@@ -270,8 +270,8 @@ class ConvFirstInference(nn.Module):
         self.input_dims = input_dims
         self.hidden_dim = hidden_dim
 
-        self.planes = [128, 64, 64, 16]
-        self.kernels = [3, 3, 3, 3]
+        self.planes = [128, 64, 64, 16, 16]
+        self.kernels = [3, 3, 3, 3, 3]
 
         # self.planes = [32, 16]
         # self.kernels = [3, 3]

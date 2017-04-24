@@ -221,11 +221,11 @@ class IndependentModel(nn.Module):
         priming_steps = len(priming)
         # generations = []
 
-        if isinstance(self.inference, ConvInference):
+        if isinstance(self.inference, ConvInference) and priming[0].dim() != 4:
             priming = [x.resize(x.size(0), 3, self.img_size, self.img_size)
                        for x in priming]
 
-        generations = [p.clone() for p in priming]
+        generations = [p.cpu() for p in priming]
         latent = self.first_inference(priming[0])[0]
         # generations.append(self.generator(latent)[0])
         for t in range(1, priming_steps):
@@ -241,17 +241,17 @@ class IndependentModel(nn.Module):
                 latent = sample(latent_dist)
             else:
                 latent = sample((latent_dist[0], latent_dist[1] / 100))
-            generations.append(self.generator(latent)[0])
+            generations.append(self.generator(latent)[0].cpu())
         return generations
 
     def generate_independent(self, priming, steps, sampling=True):
         priming_steps = len(priming)
 
-        if isinstance(self.inference, ConvInference):
-            priming = [x.resize(x.size(0),  3, self.img_size, self.img_size)
+        if isinstance(self.inference, ConvInference) and priming[0].dim() != 4:
+            priming = [x.resize(x.size(0), 3, self.img_size, self.img_size)
                        for x in priming]
 
-        generations = [[p.clone() for p in priming]
+        generations = [[p.cpu() for p in priming]
                        for _ in range(self.n_latents)]
 
         latent = self.first_inference(priming[0])[0]
@@ -277,18 +277,18 @@ class IndependentModel(nn.Module):
                     new_z = sample((predicted_z[0], predicted_z[1] / 100))
                 latent[:, z_i*self.hidden_dim : (z_i+1)*self.hidden_dim] = new_z
 
-                generations[z_i].append(self.generator(latent)[0])
+                generations[z_i].append(self.generator(latent)[0].cpu())
         return generations
 
     def generate_variations(self, priming, steps):
         priming_steps = len(priming)
         # generations = [[] for _ in range(self.n_latents)]
 
-        if isinstance(self.inference, ConvInference):
+        if isinstance(self.inference, ConvInference) and priming[0].dim() != 4:
             priming = [x.resize(x.size(0), 3, self.img_size, self.img_size)
                        for x in priming]
 
-        generations = [[p.clone() for p in priming]
+        generations = [[p.cpu() for p in priming]
                        for _ in range(self.n_latents)]
         latent = self.first_inference(priming[0])[0]
         # generation = self.generator(latent)[0]
@@ -305,17 +305,17 @@ class IndependentModel(nn.Module):
             for t in range(steps - priming_steps):
                 latent[:, z_i*self.hidden_dim : (z_i+1)*self.hidden_dim].data.normal_(0, 1)
 
-                generations[z_i].append(self.generator(latent)[0])
+                generations[z_i].append(self.generator(latent)[0].cpu())
         return generations
 
     def generate_interpolations(self, priming, steps):
         priming_steps = len(priming)
         # generations = [[] for _ in range(self.n_latents)]
-        if isinstance(self.inference, ConvInference):
+        if isinstance(self.inference, ConvInference) and priming[0].dim() != 4:
             priming = [x.resize(x.size(0), 3, self.img_size, self.img_size)
                        for x in priming]
 
-        generations = [[p.clone() for p in priming]
+        generations = [[p.cpu() for p in priming]
                        for _ in range(self.n_latents)]
         latent = self.first_inference(priming[0])[0]
         # generation = self.generator(latent)[0]
@@ -337,7 +337,7 @@ class IndependentModel(nn.Module):
 
             for alpha in torch.linspace(-1, 1, steps - priming_steps):
                 latent[:, z_i*self.hidden_dim : (z_i+1)*self.hidden_dim] = single_z_const + alpha * noise
-                generations[z_i].append(self.generator(latent)[0])
+                generations[z_i].append(self.generator(latent)[0].cpu())
         return generations
 
 

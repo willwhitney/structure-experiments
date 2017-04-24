@@ -36,6 +36,7 @@ logging.debug(("step,loss,nll,divergence,prior divergence,"
 
 # train_dataset = AtariData(opt.game, 'train', 5)
 train_dataset = VideoData('/speedy/data/urban', 5)
+# train_dataset = VideoData('.', 5)
 train_loader = DataLoader(train_dataset,
                           num_workers=0,
                           batch_size=batch_size,
@@ -71,6 +72,10 @@ def sequence_input(seq):
     return [Variable(x.type(dtype)) for x in seq]
 
 def save_generations(sequence, generations):
+    # volatile input -> no saved intermediate values
+    for x in sequence:
+        x.volatile = True
+
     # save some results from the latest batch
     mus_data = [gen[0].data for gen in generations]
     seq_data = [x.data for x in sequence]
@@ -177,10 +182,10 @@ progress = progressbar.ProgressBar(max_value=k)
 i = 0
 while i < n_steps:
     for sequence in train_loader:
-        i += 1
         # deal with the last, missized batch until drop_last gets shipped
         if sequence.size(0) != batch_size:
             continue
+        i += 1
 
         sequence.transpose_(0, 1)
         sequence = sequence_input(list(sequence))
