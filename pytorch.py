@@ -29,7 +29,7 @@ logging.basicConfig(filename = opt.save + "/results.csv",
                     level = logging.DEBUG,
                     format = "%(message)s")
 logging.debug(("step,loss,nll,divergence,prior divergence,"
-               "trans divergence,grad norm,ms/seq"))
+               "trans divergence,grad norm,ms/seq,lr"))
 
 # gen = DataGenerator()
 # data_dim = gen.start().render().nelement()
@@ -158,7 +158,16 @@ def save_generations(sequence, generations):
                 opt.save + '/interp_'+str(j)+'.png',
                 image)
 
-model = IndependentModel(opt.latents, opt.latent_dim, image_width).type(dtype)
+if opt.load is not None:
+    model = torch.load('results/' + opt.load + '/model.t7').type(dtype)
+    i = int(5e5)
+    opt.lr = opt.lr  * 0.985 ** (i / 10000)
+else:
+    i = 0
+    model = IndependentModel(opt.latents,
+                             opt.latent_dim,
+                             image_width).type(dtype)
+
 optimizer = optim.Adam(
     model.parameters(),
     lr=opt.lr)
@@ -179,9 +188,9 @@ n_steps = int(1e7)
 
 k = 1000
 progress = progressbar.ProgressBar(max_value=k)
-i = 0
 while i < n_steps:
     for sequence in train_loader:
+        save_generations(sequence, generations)
         # deal with the last, missized batch until drop_last gets shipped
         if sequence.size(0) != batch_size:
             continue
@@ -237,19 +246,25 @@ while i < n_steps:
                           mean_prior_div / k,
                           mean_trans_div / k,
                           mean_grad_norm / k,
-                          elapsed_seconds / k / batch_size * 1000)
+                          elapsed_seconds / k / batch_size * 1000,
+                          opt.lr)
             print(("Step: {:8d}, Loss: {:10.3f}, NLL: {:10.3f}, "
                    "Divergence: {:10.3f}, "
                    "Prior divergence: {:10.3f}, "
                    "Trans divergence: {:10.3f}, "
                    "Grad norm: {:10.3f}, "
-                   "ms/seq: {:6.2f}").format(*log_values))
+                   "ms/seq: {:6.2f}").format(*log_values[:-1]))
 
             # make list of n copies of format string, then format
             format_string = ",".join(["{:.8e}"]*len(log_values))
             logging.debug(format_string.format(*log_values))
 
-            torch.save(model, opt.save + '/model.t7')
+            save_dict = {
+                    'model': model,
+                    'opt': vars(opt),
+                    'i': i,
+                }
+            torch.save(save_dict, opt.save + '/model.t7')
             mean_loss = 0
             mean_divergence = 0
             mean_prior_div = 0

@@ -132,9 +132,13 @@ class IndependentModel(nn.Module):
         # self.inference = Inference(prod(image_dim), total_z_dim)
         # self.generator = Generator(total_z_dim, prod(image_dim))
 
-        self.first_inference = ConvFirstInference(image_dim, total_z_dim)
-        self.inference = ConvInference(image_dim, total_z_dim)
-        self.generator = ConvGenerator(total_z_dim, image_dim)
+        # self.first_inference = ConvFirstInference(image_dim, total_z_dim)
+        # self.inference = ConvInference(image_dim, total_z_dim)
+        # self.generator = ConvGenerator(total_z_dim, image_dim)
+
+        self.first_inference = DCGANFirstInference(image_dim, total_z_dim)
+        self.inference = DCGANInference(image_dim, total_z_dim)
+        self.generator = DCGANGenerator(total_z_dim, image_dim)
 
     def predict_latent(self, latent):
         z_prior = []
@@ -158,12 +162,12 @@ class IndependentModel(nn.Module):
         generations = []
 
         reshaped_sequence = sequence
-        if isinstance(self.inference, ConvInference):
-            reshaped_sequence = [x.resize(x.size(0),
-                                          3,
-                                          self.img_size,
-                                          self.img_size)
-                                 for x in sequence]
+        # if isinstance(self.inference, ConvInference):
+        reshaped_sequence = [x.resize(x.size(0),
+                                      3,
+                                      self.img_size,
+                                      self.img_size)
+                             for x in sequence]
 
         inferred_z_post = self.first_inference(reshaped_sequence[0])
         cat_prior = self.z1_prior
@@ -186,6 +190,7 @@ class IndependentModel(nn.Module):
             # z_sample = inferred_z_post[0]
 
             gen_dist = self.generator(z_sample)
+            # import ipdb; ipdb.set_trace()
             log_likelihood = LL(gen_dist, reshaped_sequence[t])
             seq_nll = seq_nll - log_likelihood
 
@@ -221,7 +226,8 @@ class IndependentModel(nn.Module):
         priming_steps = len(priming)
         # generations = []
 
-        if isinstance(self.inference, ConvInference) and priming[0].dim() != 4:
+        # if isinstance(self.inference, ConvInference) and priming[0].dim() != 4:
+        if priming[0].dim() != 4:
             priming = [x.resize(x.size(0), 3, self.img_size, self.img_size)
                        for x in priming]
 
@@ -247,7 +253,8 @@ class IndependentModel(nn.Module):
     def generate_independent(self, priming, steps, sampling=True):
         priming_steps = len(priming)
 
-        if isinstance(self.inference, ConvInference) and priming[0].dim() != 4:
+        # if isinstance(self.inference, ConvInference) and priming[0].dim() != 4:
+        if priming[0].dim() != 4:
             priming = [x.resize(x.size(0), 3, self.img_size, self.img_size)
                        for x in priming]
 
@@ -284,7 +291,8 @@ class IndependentModel(nn.Module):
         priming_steps = len(priming)
         # generations = [[] for _ in range(self.n_latents)]
 
-        if isinstance(self.inference, ConvInference) and priming[0].dim() != 4:
+        # if isinstance(self.inference, ConvInference) and priming[0].dim() != 4:
+        if priming[0].dim() != 4:
             priming = [x.resize(x.size(0), 3, self.img_size, self.img_size)
                        for x in priming]
 
@@ -311,7 +319,9 @@ class IndependentModel(nn.Module):
     def generate_interpolations(self, priming, steps):
         priming_steps = len(priming)
         # generations = [[] for _ in range(self.n_latents)]
-        if isinstance(self.inference, ConvInference) and priming[0].dim() != 4:
+
+        # if isinstance(self.inference, ConvInference) and priming[0].dim() != 4:
+        if priming[0].dim() != 4:
             priming = [x.resize(x.size(0), 3, self.img_size, self.img_size)
                        for x in priming]
 
