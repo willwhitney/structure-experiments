@@ -27,13 +27,15 @@ class VideoData(Dataset):
     def __init__(self, directory, seq_len):
         self.seq_len = seq_len
         self.filenames = glob.glob("{}/*.MP4".format(directory))
+        # self.filenames = ["{}/1fps_1.MP4".format(directory)]
         self.image_size = [3, 128, 128]
 
         self.loaded = {}
 
         self.videos = []
         for fname in self.filenames:
-            v = imageio.get_reader(fname, 'avbin')
+            print(fname)
+            # v = imageio.get_reader(fname, 'avbin')
 
             # vlist = []
             # for frame in v:
@@ -50,11 +52,18 @@ class VideoData(Dataset):
     def __getitem__(self, i):
         # do some bookkeeping to find the video that contains i
         current_count = 0
-        v_index = 0
-        while current_count + len(self.videos[v_index]) - self.seq_len < i:
-            current_count += len(self.videos[v_index])
-            v_index += 1
-        v = self.videos[v_index]
+        correct_v = None
+        for v in self.videos:
+            end_padding = self.seq_len * v.fps
+            if current_count + len(v) - end_padding > i:
+                correct_v = v
+                break
+            else:
+                current_count += len(v) - end_padding
+        # while current_count + len(self.videos[v_index]) - self.seq_len < i:
+        #     current_count += len(self.videos[v_index])
+        #     v_index += 1
+        # v = self.videos[v_index]
         start_frame = i - current_count
 
         seq = torch.Tensor(self.seq_len, *self.image_size)
@@ -82,8 +91,8 @@ class VideoData(Dataset):
 # from util import *
 # v = Video('output.MP4', [3, 128, 128])
 
-# data = VideoData('.', 5)
-# DataLoader(data, num_workers = 0, batch_size = 32, shuffle = True)
-# d = data[17]
-#
-# show(d0[0])
+# data = VideoData('/speedy/data/urban', 5)
+# for i, d in enumerate(data):
+#     print(i)
+
+# loader = DataLoader(data, num_workers = 0, batch_size = 32, shuffle = True)
