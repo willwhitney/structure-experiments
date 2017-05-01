@@ -5,6 +5,7 @@ import functools
 import os
 import math
 import matplotlib.pyplot as plt
+import imageio
 
 def is_sequence(arg):
     return (not hasattr(arg, "strip") and
@@ -60,14 +61,30 @@ def image_tensor(inputs, padding=1):
                    (i+1) * y_dim + i * padding].copy_(image)
         return result
 
+def make_image(tensor):
+    tensor = tensor.cpu().clamp(0, 1)
+    return scipy.misc.toimage(tensor.numpy(),
+                              high=255*tensor.max(),
+                              channel_axis=0)
+
 def save_image(filename, tensor):
-    tensor = tensor.clamp(0, 1)
-    img = scipy.misc.toimage(tensor.cpu().numpy(), high=255*tensor.max(), channel_axis=0)
+    img = make_image(tensor)
     img.save(filename)
 
 def save_tensors_image(filename, inputs, padding=1):
     images = image_tensor(inputs, padding)
     return save_image(filename, images)
+
+def save_gif(filename, inputs, bounce=False):
+    images = []
+    for tensor in inputs:
+        tensor = tensor.cpu()
+        tensor = tensor.transpose(0,1).transpose(1,2).clamp(0,1)
+        images.append(tensor.cpu().numpy())
+    if bounce:
+        images = images + list(reversed(images[1:-1]))
+    imageio.mimsave(filename, images, duration=0.2)
+
 
 def clip_grad_norm(parameters, max_norm, norm_type=2):
     """Clips gradient norm of an iterable of parameters.

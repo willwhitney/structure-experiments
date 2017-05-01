@@ -18,6 +18,8 @@ batch_size = 32
 parser = argparse.ArgumentParser()
 parser.add_argument('--name', default=get_gpu())
 parser.add_argument('--load', default=None)
+parser.add_argument('--load_step', default=0, type=float)
+
 parser.add_argument('--lr', default=3e-4, type=float)
 parser.add_argument('--no_lr_decay', action="store_true")
 parser.add_argument('--no_sgld', action="store_true")

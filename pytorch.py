@@ -20,6 +20,7 @@ from modules import *
 from models import *
 from env import *
 from params import *
+from generations import *
 from atari_dataset import AtariData
 from video_dataset import VideoData
 
@@ -35,8 +36,9 @@ logging.debug(("step,loss,nll,divergence,prior divergence,"
 # data_dim = gen.start().render().nelement()
 
 # train_dataset = AtariData(opt.game, 'train', 5)
-train_dataset = VideoData('/speedy/data/urban', 5)
-# train_dataset = VideoData('.', 5)
+# train_dataset = VideoData('/speedy/data/urban/IMG_3470.MP4', 5)
+train_dataset = VideoData('/speedy/data/urban', 5, framerate=2)
+# train_dataset = VideoData('.', 5, framerate=2)
 train_loader = DataLoader(train_dataset,
                           num_workers=0,
                           batch_size=batch_size,
@@ -71,96 +73,10 @@ def make_seq(length, dim):
 def sequence_input(seq):
     return [Variable(x.type(dtype)) for x in seq]
 
-def save_generations(sequence, generations):
-    # volatile input -> no saved intermediate values
-    for x in sequence:
-        x.volatile = True
-
-    # save some results from the latest batch
-    mus_data = [gen[0].data for gen in generations]
-    seq_data = [x.data for x in sequence]
-    for j in range(5):
-        mus = [x[j].view(3,image_width,image_width)
-               for x in mus_data]
-        truth = [x[j].view(3,image_width,image_width)
-                 for x in seq_data]
-        save_tensors_image(opt.save + '/result_'+str(j)+'.png',
-                           [truth, mus])
-
-    priming = sequence[:2]
-
-    # save sequence generations
-    samples = model.generate(priming, 20, True)
-    mus = [x.data for x in samples]
-    for j in range(5):
-        mu = [x[j].view(3,image_width,image_width) for x in mus]
-        save_tensors_image(opt.save + '/gen_'+str(j)+'.png', mu)
-
-    # save max-likelihood generations
-    samples = model.generate(priming, 20, False)
-    mus = [x.data for x in samples]
-    for j in range(5):
-        mu = [x[j].view(3,image_width,image_width) for x in mus]
-        save_tensors_image(opt.save + '/ml_'+str(j)+'.png', mu)
-
-    # save samples from the first-frame prior
-    if not isinstance(model, MSEModel):
-        prior_sample = sample(model.z1_prior)
-        image_dist = model.generator(prior_sample)
-        image_sample = image_dist[0].resize(32, 3, image_width, image_width)
-        image_sample = [[image] for image in image_sample]
-        save_tensors_image(opt.save + '/prior_samples.png',
-                           image_sample)
-
-    # save ML generations with only one latent evolving
-    if isinstance(model, IndependentModel):
-        samples = model.generate_independent(priming, 20, False)
-        samples = [[x.data for x in sample_row]
-                   for sample_row in samples]
-        for j in range(5):
-            image = [[x[j].view(3,image_width,image_width) for x in sample_row]
-                      for sample_row in samples]
-            save_tensors_image(opt.save + '/ind_ml_'+str(j)+'.png',
-                               image)
-
-    # save samples with only one latent evolving
-    if isinstance(model, IndependentModel):
-        samples = model.generate_independent(priming, 20, True)
-        samples = [[x.data for x in sample_row]
-                   for sample_row in samples]
-        for j in range(5):
-            image = [[x[j].view(3,image_width,image_width) for x in sample_row]
-                      for sample_row in samples]
-            save_tensors_image(opt.save + '/ind_gen_'+str(j)+'.png',
-                               image)
-
-    # save samples with only one latent randomly sampling
-    if isinstance(model, IndependentModel):
-        samples = model.generate_variations(priming, 20)
-        samples = [[x.data for x in sample_row]
-                   for sample_row in samples]
-        for j in range(5):
-            image = [[x[j].view(3,image_width,image_width) for x in sample_row]
-                      for sample_row in samples]
-            save_tensors_image(
-                opt.save + '/ind_resample_'+str(j)+'.png',
-                image)
-
-    # save samples interpolating between noise near the current latent
-    if isinstance(model, IndependentModel):
-        samples = model.generate_interpolations(priming, 20)
-        samples = [[x.data for x in sample_row]
-                   for sample_row in samples]
-        for j in range(10):
-            image = [[x[j].view(3,image_width,image_width) for x in sample_row]
-                      for sample_row in samples]
-            save_tensors_image(
-                opt.save + '/interp_'+str(j)+'.png',
-                image)
-
 if opt.load is not None:
-    model = torch.load('results/' + opt.load + '/model.t7').type(dtype)
-    i = int(5e5)
+    checkpoint = torch.load('results/' + opt.load + '/model.t7')
+    model = checkpoint['model'].type(dtype)
+    i = int(opt.load_step)
     opt.lr = opt.lr  * 0.985 ** (i / 10000)
 else:
     i = 0
@@ -185,12 +101,13 @@ z_var_min = 1e6
 z_var_max = -1
 n_steps = int(1e7)
 
+# n_steps = 1
 
-k = 1000
+sequence = None
+k = 5000
 progress = progressbar.ProgressBar(max_value=k)
 while i < n_steps:
     for sequence in train_loader:
-        save_generations(sequence, generations)
         # deal with the last, missized batch until drop_last gets shipped
         if sequence.size(0) != batch_size:
             continue
@@ -271,7 +188,7 @@ while i < n_steps:
             mean_trans_div = 0
             mean_grad_norm = 0
             mean_nll = 0
-            save_generations(sequence, generations)
+            save_all_generations(model, sequence, generations)
 
             progress = progressbar.ProgressBar(max_value=k)
 
@@ -281,3 +198,6 @@ while i < n_steps:
             opt.lr = opt.lr * 0.985
             print("Decaying learning rate to: ", opt.lr)
             set_lr(optimizer, opt.lr)
+
+        if i >= n_steps:
+            break

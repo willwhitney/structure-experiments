@@ -6,6 +6,15 @@ import scipy.misc
 import imageio
 import glob
 import os
+import math
+
+def fps(path):
+    if path.find('1fps') >= 0:
+        return 1
+    elif path.find('4fps') >= 0:
+        return 4
+    else:
+        return 2
 
 class Video(list):
     def __init__(self, path, image_size):
@@ -13,7 +22,7 @@ class Video(list):
         self.path = path
         self.name = os.path.basename(path)
         self.image_size = image_size
-        self.fps = 1 if self.name.find('1fps') >= 0 else 2
+        self.fps = fps(path)
 
         v = imageio.get_reader(path, 'avbin')
         for frame in v:
@@ -24,9 +33,13 @@ class Video(list):
         v.close()
 
 class VideoData(Dataset):
-    def __init__(self, directory, seq_len):
+    def __init__(self, directory, seq_len, framerate):
         self.seq_len = seq_len
-        self.filenames = glob.glob("{}/*.MP4".format(directory))
+        self.framerate = framerate
+        if directory[-4:].lower() == '.mp4':
+            self.filenames = [directory]
+        else:
+            self.filenames = glob.glob("{}/*.MP4".format(directory))
         # self.filenames = ["{}/1fps_1.MP4".format(directory)]
         self.image_size = [3, 128, 128]
 
@@ -34,27 +47,20 @@ class VideoData(Dataset):
 
         self.videos = []
         for fname in self.filenames:
-            print(fname)
-            # v = imageio.get_reader(fname, 'avbin')
+            if fps(fname) >= framerate:
+                print(fname)
+                v = Video(fname, self.image_size)
+                self.videos.append(v)
 
-            # vlist = []
-            # for frame in v:
-            #     resized = scipy.misc.imresize(frame, self.image_size[1:])
-            #     resized = torch.from_numpy(resized).float()
-            #     resized.transpose_(1, 2).transpose_(0, 1)
-            #     vlist.append(resized)
-            # self.videos.append(vlist)
-            # v.close()
-
-            v = Video(fname, self.image_size)
-            self.videos.append(v)
+    def _end_padding(self, v):
+        return math.ceil(self.seq_len * v.fps / self.framerate)
 
     def __getitem__(self, i):
         # do some bookkeeping to find the video that contains i
         current_count = 0
         correct_v = None
         for v in self.videos:
-            end_padding = self.seq_len * v.fps
+            end_padding = self._end_padding(v)
             if current_count + len(v) - end_padding > i:
                 correct_v = v
                 break
@@ -68,7 +74,7 @@ class VideoData(Dataset):
 
         seq = torch.Tensor(self.seq_len, *self.image_size)
         for t in range(self.seq_len):
-            skipped_t = t * v.fps
+            skipped_t = t * math.ceil(v.fps / self.framerate)
 
             # np_resized = scipy.misc.imresize(v[start_frame + skipped_t],
             #                                  self.image_size[1:])
@@ -84,7 +90,7 @@ class VideoData(Dataset):
     def __len__(self):
         sequences = 0
         for v in self.videos:
-            sequences += len(v) - self.seq_len * v.fps
+            sequences += len(v) - self._end_padding(v)
         return sequences
 
 # v = Video('/speedy/data/urban/1fps_1.MP4', [3, 128, 128])
