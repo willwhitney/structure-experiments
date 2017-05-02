@@ -33,15 +33,14 @@ class Video(list):
         v.close()
 
 class VideoData(Dataset):
-    def __init__(self, directory, seq_len, framerate):
+    def __init__(self, directory, seq_len, framerate, image_width=128):
         self.seq_len = seq_len
         self.framerate = framerate
         if directory[-4:].lower() == '.mp4':
             self.filenames = [directory]
         else:
             self.filenames = glob.glob("{}/*.MP4".format(directory))
-        # self.filenames = ["{}/1fps_1.MP4".format(directory)]
-        self.image_size = [3, 128, 128]
+        self.image_size = [3, image_width, image_width]
 
         self.loaded = {}
 
@@ -66,21 +65,11 @@ class VideoData(Dataset):
                 break
             else:
                 current_count += len(v) - end_padding
-        # while current_count + len(self.videos[v_index]) - self.seq_len < i:
-        #     current_count += len(self.videos[v_index])
-        #     v_index += 1
-        # v = self.videos[v_index]
         start_frame = i - current_count
 
         seq = torch.Tensor(self.seq_len, *self.image_size)
         for t in range(self.seq_len):
             skipped_t = t * math.ceil(v.fps / self.framerate)
-
-            # np_resized = scipy.misc.imresize(v[start_frame + skipped_t],
-            #                                  self.image_size[1:])
-            # resized = torch.from_numpy(np_resized).float()
-            # resized.transpose_(1, 2).transpose_(0, 1)
-            # seq[t].copy_(resized)
             frame = v[start_frame + skipped_t]
             seq[t].copy_(frame)
         return seq

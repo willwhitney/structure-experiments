@@ -26,27 +26,65 @@ from video_dataset import VideoData
 
 print("Tensor type: ", dtype)
 
+if not os.path.exists(opt.save):
+    os.makedirs(opt.save)
+else:
+    filelist = glob.glob(opt.save + "/*")
+    for f in filelist:
+        os.remove(f)
+
+with open(opt.save + "/opt.json", 'w') as f:
+    serial_opt = json.dumps(vars(opt), indent=4, sort_keys=True)
+    print(serial_opt)
+    f.write(serial_opt)
+    f.flush()
+
 logging.basicConfig(filename = opt.save + "/results.csv",
                     level = logging.DEBUG,
                     format = "%(message)s")
 logging.debug(("step,loss,nll,divergence,prior divergence,"
                "trans divergence,grad norm,ms/seq,lr"))
 
-# gen = DataGenerator()
-# data_dim = gen.start().render().nelement()
+# ------- load the model --------
+if opt.load is not None:
+    checkpoint = torch.load('results/' + opt.load + '/model.t7')
+    model = checkpoint['model'].type(dtype)
+    i = checkpoint['i']
+    cp_opt = checkpoint['opt']
 
-# train_dataset = AtariData(opt.game, 'train', 5)
-# train_dataset = VideoData('/speedy/data/urban/IMG_3470.MP4', 5)
-train_dataset = VideoData('/speedy/data/urban', 5, framerate=2)
-# train_dataset = VideoData('.', 5, framerate=2)
+    # we're strictly trying to pick up where we left off
+    # load everything just as it was (but rename)
+    if opt.resume:
+        setattrs(opt, cp_opt)
+        opt.name = cp_opt['name'] + '_'
+
+    # if we want to use the options from the checkpoint, load them in
+    # (skip the ones that don't make sense to load)
+    if opt.use_loaded_opt:
+        setattrs(opt, cp_opt, exceptions=['name', 'load', 'sanity'])
+else:
+    i = 0
+    model = IndependentModel(opt.latents,
+                             opt.latent_dim,
+                             opt.image_width).type(dtype)
+
+# --------- load a dataset ---------
+if opt.sanity:
+    train_dataset = VideoData('.', 5,
+                              framerate=2,
+                              image_width=opt.image_width)
+else:
+    train_dataset = VideoData('/speedy/data/urban', 5,
+                              framerate=2,
+                              image_width=opt.image_width)
 train_loader = DataLoader(train_dataset,
                           num_workers=0,
                           batch_size=batch_size,
                           shuffle=True)
                         #   drop_last=True)
+print("Number of training sequences (with overlap): " + str(len(train_dataset)))
+# ------------------------------------
 
-image_width = train_dataset.image_size[1]
-# image_width = gen.image_size[1]
 
 KL = GaussianKLD().type(dtype)
 LL = GaussianLL().type(dtype)
@@ -54,12 +92,12 @@ mse = nn.MSELoss().type(dtype)
 l1 = nn.L1Loss().type(dtype)
 
 def make_real_seq(length):
-    sequence = [torch.zeros(batch_size, image_width**2 * 3) for _ in range(length)]
+    sequence = [torch.zeros(batch_size, opt.image_width**2 * 3)
+                for _ in range(length)]
     for batch in range(batch_size):
-        sequence[0][batch] = gen.start().render().view(image_width**2 * 3)
+        sequence[0][batch] = gen.start().render().view(opt.image_width**2 * 3)
         for i in range(1, length):
-            sequence[i][batch] = gen.step().render().view(image_width**2 * 3)
-
+            sequence[i][batch] = gen.step().render().view(opt.image_width**2 * 3)
     return [Variable(x.type(dtype)) for x in sequence]
 
 def make_seq(length, dim):
@@ -72,17 +110,6 @@ def make_seq(length, dim):
 
 def sequence_input(seq):
     return [Variable(x.type(dtype)) for x in seq]
-
-if opt.load is not None:
-    checkpoint = torch.load('results/' + opt.load + '/model.t7')
-    model = checkpoint['model'].type(dtype)
-    i = int(opt.load_step)
-    opt.lr = opt.lr  * 0.985 ** (i / 10000)
-else:
-    i = 0
-    model = IndependentModel(opt.latents,
-                             opt.latent_dim,
-                             image_width).type(dtype)
 
 optimizer = optim.Adam(
     model.parameters(),
@@ -99,12 +126,14 @@ mean_grad_norm = 0
 z_var_means = []
 z_var_min = 1e6
 z_var_max = -1
-n_steps = int(1e7)
-
-# n_steps = 1
 
 sequence = None
-k = 5000
+if opt.sanity:
+    n_steps = 10
+    k = 10
+else:
+    n_steps = int(1e7)
+    k = 5000
 progress = progressbar.ProgressBar(max_value=k)
 while i < n_steps:
     for sequence in train_loader:
@@ -116,7 +145,11 @@ while i < n_steps:
         sequence.transpose_(0, 1)
         sequence = sequence_input(list(sequence))
 
-        generations, nll, divergences = model(sequence)
+        kl_scale = 1
+        # if not opt.no_kl_annealing:
+        #     kl_scale = max(0, min(i / opt.kl_anneal_end, 1))
+
+        generations, nll, divergences = model(sequence, kl_scale=kl_scale)
         (seq_divergence, seq_prior_div, seq_trans_div) = divergences
         mean_divergence += seq_divergence.data[0]
         mean_prior_div += seq_prior_div.data[0]
@@ -128,11 +161,10 @@ while i < n_steps:
         # z_var_min = min(var_min, z_var_min)
         # z_var_max = max(var_max, z_var_max)
 
+        kl_penalty = seq_divergence
         if not opt.no_kl_annealing:
             kl_weight = max(0, min(i / opt.kl_anneal_end, 1))
             kl_penalty = kl_weight * seq_divergence
-        else:
-            kl_penalty = seq_divergence
 
         loss = nll + kl_penalty
         mean_loss += loss.data[0]

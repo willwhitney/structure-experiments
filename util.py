@@ -243,3 +243,8 @@ def show(img_tensor):
     plt.figure()
     plt.imshow(output_tensor.numpy())
     plt.show()
+
+def setattrs(obj, attr_dict, exceptions=[]):
+    for key in attr_dict:
+        if key not in exceptions:
+            setattr(obj, key, attr_dict[key])

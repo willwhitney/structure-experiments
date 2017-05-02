@@ -150,7 +150,7 @@ class IndependentModel(nn.Module):
                      torch.cat([prior[1] for prior in z_prior], 1))
         return cat_prior
 
-    def forward(self, sequence):
+    def forward(self, sequence, kl_scale=1):
         # loss = Variable(torch.zeros(1).type(dtype))
         seq_divergence = Variable(torch.zeros(1).type(dtype))
         seq_prior_div = Variable(torch.zeros(1).type(dtype))
@@ -177,6 +177,9 @@ class IndependentModel(nn.Module):
         z_var_max = -1
 
         for t in range(len(sequence)):
+            inferred_z_post[0].register_hook(lambda grad: grad * kl_scale)
+            inferred_z_post[1].register_hook(lambda grad: grad * kl_scale)
+
             divergence = KL(inferred_z_post, cat_prior)
             seq_divergence = seq_divergence + divergence
             if t == 0:

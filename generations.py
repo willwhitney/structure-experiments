@@ -42,7 +42,7 @@ def save_generations(model, priming):
         mu = [x[j] #.view(3,image_width,image_width)
               for x in mus]
         save_tensors_image(opt.save + '/gen_'+str(j)+'.png', mu)
-        # os.makedirs(opt.save + '/gen', exist_ok=True)
+        save_gif(opt.save + '/gen_'+str(j)+'.gif', mu)
 
 def save_ml(model, priming):
     for p in priming:
@@ -55,6 +55,7 @@ def save_ml(model, priming):
         mu = [x[j] #.view(3,image_width,image_width)
               for x in mus]
         save_tensors_image(opt.save + '/ml_'+str(j)+'.png', mu)
+        save_gif(opt.save + '/ml_'+str(j)+'.gif', mu)
 
 def save_z1_samples(model):
     # save samples from the first-frame prior

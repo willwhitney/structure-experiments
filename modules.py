@@ -609,7 +609,6 @@ class GaussianKLD(nn.Module):
         mu_p = batch_flatten(mu_p)
         sigma_p = batch_flatten(sigma_p)
 
-
         a = torch.sum(torch.log(sigma_p), 1) - torch.sum(torch.log(sigma_q), 1)
         b = torch.sum(sigma_q / sigma_p, 1)
 
