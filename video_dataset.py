@@ -7,6 +7,7 @@ import imageio
 import glob
 import os
 import math
+import random
 
 def fps(path):
     if path.find('1fps') >= 0:
@@ -15,6 +16,13 @@ def fps(path):
         return 4
     else:
         return 2
+
+def get_videos(directory):
+    if directory[-4:].lower() == '.mp4':
+        filenames = [directory]
+    else:
+        filenames = glob.glob("{}/*.MP4".format(directory))
+    return filenames
 
 class Video(list):
     def __init__(self, path, image_size):
@@ -32,14 +40,49 @@ class Video(list):
             self.append(resized)
         v.close()
 
+class VideoChunk(list):
+    def __init__(self, frames, framerate):
+        super(VideoChunk, self).__init__()
+        self.extend(frames)
+        self.fps = framerate
+
+def make_split_datasets(directory, seq_len, framerate,
+                        image_width=128, chunk_length=1000):
+    filenames = get_videos(directory)
+
+    videos = []
+    for fname in filenames:
+        if fps(fname) >= framerate:
+            print(fname)
+            v = Video(fname, [3, image_width, image_width])
+            videos.append(v)
+
+    chunks = []
+    for v in videos:
+        for i in range(0, len(v), chunk_length):
+            chunk = VideoChunk(v[i : i + chunk_length], framerate)
+            chunks.append(chunk)
+
+    train_frac = 0.9
+    test_frac = 1 - train_frac
+    test_chunk_indices = random.sample(list(range(len(chunks))),
+                                       int(len(chunks) * test_frac))
+    test_chunk_indices = set(test_chunk_indices)
+    train_chunk_indices = set(list(range(len(chunks))))
+    train_chunk_indices = train_chunk_indices - test_chunk_indices
+
+    train_chunks = [chunks[i] for i in train_chunk_indices]
+    test_chunks = [chunks[i] for i in test_chunk_indices]
+
+    train_dataset = ChunkData(train_chunks, seq_len, framerate, image_width)
+    test_dataset = ChunkData(test_chunks, seq_len, framerate, image_width)
+    return train_dataset, test_dataset
+
 class VideoData(Dataset):
     def __init__(self, directory, seq_len, framerate, image_width=128):
         self.seq_len = seq_len
         self.framerate = framerate
-        if directory[-4:].lower() == '.mp4':
-            self.filenames = [directory]
-        else:
-            self.filenames = glob.glob("{}/*.MP4".format(directory))
+        self.filenames = get_videos(directory)
         self.image_size = [3, image_width, image_width]
 
         self.loaded = {}
@@ -81,6 +124,21 @@ class VideoData(Dataset):
         for v in self.videos:
             sequences += len(v) - self._end_padding(v)
         return sequences
+
+class ChunkData(VideoData):
+    def __init__(self, chunks, seq_len, framerate,
+                 image_width=128):
+        self.seq_len = seq_len
+        self.framerate = framerate
+        self.image_size = [3, image_width, image_width]
+        self.videos = chunks
+
+        self.loaded = {}
+
+# train, test = make_split_datasets('.', 5,
+#                                   framerate=2,
+#                                   image_width=128,
+#                                   chunk_length=50)
 
 # v = Video('/speedy/data/urban/1fps_1.MP4', [3, 128, 128])
 # from util import *

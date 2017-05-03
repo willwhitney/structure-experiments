@@ -6,13 +6,13 @@ import scipy.misc
 import glob
 
 class AtariData(Dataset):
-    def __init__(self, game, mode, seq_len):
+    def __init__(self, game, mode, seq_len, image_width):
         self.seq_len = seq_len
         self.filenames = glob.glob(
             "/speedy/data/atari/{}/{}/images_*".format(
                 game, mode
             ))
-        self.image_size = [3, 64, 64]
+        self.image_size = [3, image_width, image_width]
 
         self.loaded = {}
 

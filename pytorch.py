@@ -22,7 +22,8 @@ from env import *
 from params import *
 from generations import *
 from atari_dataset import AtariData
-from video_dataset import VideoData
+from video_dataset import *
+from covariance import construct_covariance
 
 print("Tensor type: ", dtype)
 
@@ -70,19 +71,25 @@ else:
 
 # --------- load a dataset ---------
 if opt.sanity:
-    train_dataset = VideoData('.', 5,
-                              framerate=2,
-                              image_width=opt.image_width)
+    train_data = make_split_datasets('.', 5,
+                                     framerate=2,
+                                     image_width=opt.image_width)
 else:
-    train_dataset = VideoData('/speedy/data/urban', 5,
-                              framerate=2,
-                              image_width=opt.image_width)
-train_loader = DataLoader(train_dataset,
+    train_data = make_split_datasets('/speedy/data/urban', 5,
+                                     framerate=2,
+                                     image_width=opt.image_width)
+train_loader = DataLoader(train_data,
                           num_workers=0,
                           batch_size=batch_size,
                           shuffle=True)
+test_loader = DataLoader(test_data,
+                         num_workers=0,
+                         batch_size=batch_size,
+                         shuffle=True)
                         #   drop_last=True)
-print("Number of training sequences (with overlap): " + str(len(train_dataset)))
+print("Number of training sequences (with overlap): " + str(len(train_data)))
+print("Number of testing sequences (with overlap): " + str(len(test_data)))
+
 # ------------------------------------
 
 
@@ -223,6 +230,9 @@ while i < n_steps:
             save_all_generations(model, sequence, generations)
 
             progress = progressbar.ProgressBar(max_value=k)
+
+        if i == n_steps - 1 or (i % 50000 == 0 and i > 0):
+            construct_covariance(model, loader, 10000, label=i)
 
         # learning rate decay
         # 0.985 every 10K -> ~0.2 at 1,000,000 steps

@@ -26,112 +26,122 @@ from video_dataset import VideoData
 
 import sklearn.covariance
 
-# dataset = VideoData('.', 5, framerate=2)
-dataset = VideoData('/speedy/data/urban', 5, framerate=2)
-loader = DataLoader(dataset,
-                    num_workers=0,
-                    batch_size=batch_size,
-                    shuffle=True)
+def construct_covariance(model, loader, n, label=""):
+    data = []
+    for i, batch in enumerate(loader):
+        data.append(batch)
+        if i * loader.batch_size > n:
+            break
 
-data = []
-for i, batch in enumerate(loader):
-    data.append(batch)
-    if i > 1000:
-        break
+    KL = GaussianKLD().type(dtype)
+    LL = GaussianLL().type(dtype)
 
-KL = GaussianKLD().type(dtype)
-LL = GaussianLL().type(dtype)
+    def sequence_input(seq):
+        return [Variable(x.type(dtype)) for x in seq]
 
-def sequence_input(seq):
-    return [Variable(x.type(dtype)) for x in seq]
+    zs = []
 
+    for i in range(len(data)):
+        x = data[i]
+        x.transpose_(0, 1)
+        x = sequence_input(list(x))
 
-checkpoint = torch.load('results/' + opt.load + '/model.t7')
-model = checkpoint['model'].type(dtype)
-cp_opt = checkpoint['opt']
-setattrs(opt, cp_opt, exceptions=['name', 'load', 'sanity'])
+        for a in x:
+            a.volatile = True
 
-zs = []
+        inferred_z_post = model.first_inference(x[0])
+        cat_prior = model.z1_prior
 
-for i in range(len(data)):
-    x = data[i]
-    x.transpose_(0, 1)
-    x = sequence_input(list(x))
+        seq_zs = []
+        for t in range(len(x)):
+            seq_zs.append(inferred_z_post[0])
+            z_sample = sample(inferred_z_post)
+            # gen_dist = model.generator(z_sample)
 
-    for a in x:
-        a.volatile = True
+            if t < len(x) - 1:
+                cat_prior = model.predict_latent(z_sample)
+                inferred_z_post = model.inference(x[t+1],
+                                                  cat_prior[0])
+        zs.append(seq_zs)
 
-    inferred_z_post = model.first_inference(x[0])
-    cat_prior = model.z1_prior
+    paired_zs = []
+    for seq_zs in zs:
+        for t in range(len(seq_zs) - 1):
+            z = seq_zs[t]
+            z_n = seq_zs[t+1]
+            for first, second in zip(z, z_n):
+                catted = torch.cat([first, second], 0)
+                paired_zs.append(catted)
 
-    seq_zs = []
-    for t in range(len(x)):
-        seq_zs.append(inferred_z_post[0])
-        z_sample = sample(inferred_z_post)
-        # gen_dist = model.generator(z_sample)
+    paired_zs = [z.data for z in paired_zs]
+    paired_zs = torch.stack(paired_zs, 1)
+    paired_zs = paired_zs.cpu().transpose(0, 1)
+    numpy_zs = paired_zs.numpy()
+    cov = sklearn.covariance.empirical_covariance(numpy_zs)
 
-        if t < len(x) - 1:
-            cat_prior = model.predict_latent(z_sample)
-            inferred_z_post = model.inference(x[t+1],
-                                              cat_prior[0])
-    zs.append(seq_zs)
+    z_dim = model.n_latents * model.hidden_dim
 
-paired_zs = []
-for seq_zs in zs:
-    for t in range(len(seq_zs) - 1):
-        z = seq_zs[t]
-        z_n = seq_zs[t+1]
-        for first, second in zip(z, z_n):
-            catted = torch.cat([first, second], 0)
-            paired_zs.append(catted)
+    import matplotlib.pyplot as plt
+    import seaborn
+    import pandas as pd
 
-paired_zs = [z.data for z in paired_zs]
-paired_zs = torch.stack(paired_zs, 1)
-paired_zs = paired_zs.cpu().transpose(0, 1)
-numpy_zs = paired_zs.numpy()
-cov = sklearn.covariance.empirical_covariance(numpy_zs)
+    df = pd.DataFrame(numpy_zs)
+    corr_df = df.corr()
+    corr = np.array(corr_df)[:z_dim, :z_dim]
 
-z_dim = model.n_latents * model.hidden_dim
+    plt.figure()
+    hm = seaborn.heatmap(corr,
+                         xticklabels=model.hidden_dim,
+                         yticklabels=model.hidden_dim)
 
-import matplotlib.pyplot as plt
-import seaborn
-import pandas as pd
-
-df = pd.DataFrame(numpy_zs)
-corr_df = df.corr()
-corr = np.array(corr_df)[:z_dim, :z_dim]
-
-plt.figure()
-hm = seaborn.heatmap(corr,
-                     xticklabels=model.hidden_dim,
-                     yticklabels=model.hidden_dim)
-
-for i in range(1, model.n_latents):
-    location = i * model.hidden_dim
-    plt.plot([0, z_dim], [location, location], color='black', linewidth=0.5)
-    plt.plot([location, location], [0, z_dim], color='black', linewidth=0.5)
-plt.savefig('results/' + opt.load + '/autocorr.pdf')
+    for i in range(1, model.n_latents):
+        location = i * model.hidden_dim
+        plt.plot([0, z_dim], [location, location], color='black', linewidth=0.5)
+        plt.plot([location, location], [0, z_dim], color='black', linewidth=0.5)
+    name = "results/{}/autocorr_{}.pdf".format(opt.load, label)
+    plt.savefig(name)
 
 
-corr = np.array(corr_df)[:z_dim, z_dim:]
-plt.figure()
-hm = seaborn.heatmap(corr,
-                     xticklabels=model.hidden_dim,
-                     yticklabels=model.hidden_dim)
+    corr = np.array(corr_df)[:z_dim, z_dim:]
+    plt.figure()
+    hm = seaborn.heatmap(corr,
+                         xticklabels=model.hidden_dim,
+                         yticklabels=model.hidden_dim)
 
-for i in range(1, model.n_latents):
-    location = i * model.hidden_dim
-    plt.plot([0, z_dim], [location, location], color='black', linewidth=0.5)
-    plt.plot([location, location], [0, z_dim], color='black', linewidth=0.5)
-plt.savefig('results/' + opt.load + '/corr.pdf')
+    for i in range(1, model.n_latents):
+        location = i * model.hidden_dim
+        plt.plot([0, z_dim], [location, location], color='black', linewidth=0.5)
+        plt.plot([location, location], [0, z_dim], color='black', linewidth=0.5)
+    # plt.savefig('results/' + opt.load + '/corr.pdf')
+    name = "results/{}/corr_{}.pdf".format(opt.load, label)
+    plt.savefig(name)
 
-plt.figure()
-hm = seaborn.heatmap(cov[:z_dim, z_dim:],
-                     xticklabels=model.hidden_dim,
-                     yticklabels=model.hidden_dim)
+    plt.figure()
+    hm = seaborn.heatmap(cov[:z_dim, z_dim:],
+                         xticklabels=model.hidden_dim,
+                         yticklabels=model.hidden_dim)
 
-for i in range(1, model.n_latents):
-    location = i * model.hidden_dim
-    plt.plot([0, z_dim], [location, location], color='black', linewidth=0.5)
-    plt.plot([location, location], [0, z_dim], color='black', linewidth=0.5)
-plt.savefig('results/' + opt.load + '/cov.pdf')
+    for i in range(1, model.n_latents):
+        location = i * model.hidden_dim
+        plt.plot([0, z_dim], [location, location], color='black', linewidth=0.5)
+        plt.plot([location, location], [0, z_dim], color='black', linewidth=0.5)
+    # plt.savefig('results/' + opt.load + '/cov.pdf')
+    name = "results/{}/cov_{}.pdf".format(opt.load, label)
+    plt.savefig(name)
+
+
+if __name__ == "__main__":
+    # dataset = VideoData('.', 5, framerate=2)
+    dataset = VideoData('/speedy/data/urban', 5, framerate=2)
+    # dataset = VideoData('/speedy/data/urban/tuesday_4fps.MP4', 5, framerate=2)
+    loader = DataLoader(dataset,
+                        num_workers=0,
+                        batch_size=batch_size,
+                        shuffle=True)
+
+    checkpoint = torch.load('results/' + opt.load + '/model.t7')
+    model = checkpoint['model'].type(dtype)
+    cp_opt = checkpoint['opt']
+    setattrs(opt, cp_opt, exceptions=['name', 'load', 'sanity'])
+
+    construct_covariance(model, loader, 10000)
