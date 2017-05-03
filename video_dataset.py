@@ -66,7 +66,7 @@ def make_split_datasets(directory, seq_len, framerate,
     train_frac = 0.9
     test_frac = 1 - train_frac
     test_chunk_indices = random.sample(list(range(len(chunks))),
-                                       int(len(chunks) * test_frac))
+                                       math.ceil(len(chunks) * test_frac))
     test_chunk_indices = set(test_chunk_indices)
     train_chunk_indices = set(list(range(len(chunks))))
     train_chunk_indices = train_chunk_indices - test_chunk_indices

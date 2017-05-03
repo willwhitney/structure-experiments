@@ -132,21 +132,24 @@ def save_interpolation(model, priming):
     # save samples interpolating between noise near the current latent
     if isinstance(model, IndependentModel):
         samples = model.generate_interpolations(priming, 20)
-        samples = [[x.data for x in sample_row]
-                   for sample_row in samples]
-        for j in range(10):
-            image = [[x[j] #.view(3,image_width,image_width)
-                      for x in sample_row]
-                      for sample_row in samples]
-            save_tensors_image(
-                opt.save + '/interp_'+str(j)+'.png',
-                image)
-            image = [x[2:] for x in image]
-            stacked = [image_tensor([image[i][t] for i in range(len(image))])
-                       for t in range(len(image[0]))]
-            save_gif(opt.save + '/interp_' + str(j) + '.gif',
-                     stacked,
-                     bounce=True)
+
+    samples = model.generate_interpolations(priming, 50)
+    samples = [[x.data for x in sample_row]
+               for sample_row in samples]
+    for j in range(10):
+        image = [[x[j] #.view(3,image_width,image_width)
+                  for x in sample_row]
+                  for sample_row in samples]
+        save_tensors_image(
+            opt.save + '/interp_'+str(j)+'.png',
+            image)
+        image = [x[2:] for x in image]
+        stacked = [image_tensor([image[i][t] for i in range(len(image))])
+                   for t in range(len(image[0]))]
+        save_gif(opt.save + '/interp_' + str(j) + '.gif',
+                 stacked,
+                 bounce=True,
+                 duration=0.1)
 
 
 def save_single_replacement(model, sequence):

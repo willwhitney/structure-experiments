@@ -26,7 +26,7 @@ from video_dataset import VideoData
 
 import sklearn.covariance
 
-def construct_covariance(model, loader, n, label=""):
+def construct_covariance(savedir, model, loader, n, label=""):
     data = []
     for i, batch in enumerate(loader):
         data.append(batch)
@@ -98,7 +98,7 @@ def construct_covariance(model, loader, n, label=""):
         location = i * model.hidden_dim
         plt.plot([0, z_dim], [location, location], color='black', linewidth=0.5)
         plt.plot([location, location], [0, z_dim], color='black', linewidth=0.5)
-    name = "results/{}/autocorr_{}.pdf".format(opt.load, label)
+    name = "{}/autocorr_{}.pdf".format(savedir, label)
     plt.savefig(name)
 
 
@@ -112,8 +112,8 @@ def construct_covariance(model, loader, n, label=""):
         location = i * model.hidden_dim
         plt.plot([0, z_dim], [location, location], color='black', linewidth=0.5)
         plt.plot([location, location], [0, z_dim], color='black', linewidth=0.5)
-    # plt.savefig('results/' + opt.load + '/corr.pdf')
-    name = "results/{}/corr_{}.pdf".format(opt.load, label)
+    # plt.savefig('results/' + name + '/corr.pdf')
+    name = "{}/corr_{}.pdf".format(savedir, label)
     plt.savefig(name)
 
     plt.figure()
@@ -125,8 +125,8 @@ def construct_covariance(model, loader, n, label=""):
         location = i * model.hidden_dim
         plt.plot([0, z_dim], [location, location], color='black', linewidth=0.5)
         plt.plot([location, location], [0, z_dim], color='black', linewidth=0.5)
-    # plt.savefig('results/' + opt.load + '/cov.pdf')
-    name = "results/{}/cov_{}.pdf".format(opt.load, label)
+    # plt.savefig('results/' + name + '/cov.pdf')
+    name = "{}/cov_{}.pdf".format(savedir, label)
     plt.savefig(name)
 
 
@@ -144,4 +144,4 @@ if __name__ == "__main__":
     cp_opt = checkpoint['opt']
     setattrs(opt, cp_opt, exceptions=['name', 'load', 'sanity'])
 
-    construct_covariance(model, loader, 10000)
+    construct_covariance('results/' + opt.load, model, loader, 10000)

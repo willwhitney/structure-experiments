@@ -75,7 +75,7 @@ def save_tensors_image(filename, inputs, padding=1):
     images = image_tensor(inputs, padding)
     return save_image(filename, images)
 
-def save_gif(filename, inputs, bounce=False):
+def save_gif(filename, inputs, bounce=False, duration=0.2):
     images = []
     for tensor in inputs:
         tensor = tensor.cpu()
@@ -83,7 +83,7 @@ def save_gif(filename, inputs, bounce=False):
         images.append(tensor.cpu().numpy())
     if bounce:
         images = images + list(reversed(images[1:-1]))
-    imageio.mimsave(filename, images, duration=0.2)
+    imageio.mimsave(filename, images, duration=duration)
 
 
 def clip_grad_norm(parameters, max_norm, norm_type=2):

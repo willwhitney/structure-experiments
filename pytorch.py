@@ -71,13 +71,11 @@ else:
 
 # --------- load a dataset ---------
 if opt.sanity:
-    train_data = make_split_datasets('.', 5,
-                                     framerate=2,
-                                     image_width=opt.image_width)
+    train_data, test_data = make_split_datasets(
+        '.', 5, framerate=2, image_width=opt.image_width, chunk_length=100)
 else:
-    train_data = make_split_datasets('/speedy/data/urban', 5,
-                                     framerate=2,
-                                     image_width=opt.image_width)
+    train_data, test_data = make_split_datasets(
+        '/speedy/data/urban', 5, framerate=2, image_width=opt.image_width)
 train_loader = DataLoader(train_data,
                           num_workers=0,
                           batch_size=batch_size,
@@ -140,7 +138,7 @@ if opt.sanity:
     k = 10
 else:
     n_steps = int(1e7)
-    k = 5000
+    k = 10000
 progress = progressbar.ProgressBar(max_value=k)
 while i < n_steps:
     for sequence in train_loader:
@@ -188,7 +186,7 @@ while i < n_steps:
         optimizer.step()
 
         progress.update(i%k)
-        if i == n_steps - 1 or (i % k == 0 and i > 0):
+        if i == n_steps or (i % k == 0 and i > 0):
             progress.finish()
             clear_progressbar()
 
@@ -219,6 +217,8 @@ while i < n_steps:
                     'model': model,
                     'opt': vars(opt),
                     'i': i,
+                    'train_data': train_data,
+                    'test_data': test_data,
                 }
             torch.save(save_dict, opt.save + '/model.t7')
             mean_loss = 0
@@ -231,8 +231,11 @@ while i < n_steps:
 
             progress = progressbar.ProgressBar(max_value=k)
 
-        if i == n_steps - 1 or (i % 50000 == 0 and i > 0):
-            construct_covariance(model, loader, 10000, label=i)
+        if i == n_steps or (i % 50000 == 0 and i > 0):
+            construct_covariance(opt.save, model, train_loader, 10000,
+                                 label="train_" + str(i))
+            construct_covariance(opt.save, model, test_loader, 10000,
+                                 label="test_" + str(i))
 
         # learning rate decay
         # 0.985 every 10K -> ~0.2 at 1,000,000 steps
