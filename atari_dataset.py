@@ -9,7 +9,7 @@ import socket
 class AtariData(Dataset):
     def __init__(self, game, mode, seq_len, image_width):
         self.seq_len = seq_len
-        if socket.hostname() == 'zaan':
+        if socket.gethostname() == 'zaan':
             data_path = "/speedy/data/atari"
         else:
             data_path = "/misc/vlgscratch2/FergusGroup/wwhitney/data/atari"
