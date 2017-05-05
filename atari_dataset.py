@@ -4,13 +4,18 @@ from torch.utils.serialization import load_lua
 
 import scipy.misc
 import glob
+import socket
 
 class AtariData(Dataset):
     def __init__(self, game, mode, seq_len, image_width):
         self.seq_len = seq_len
+        if socket.hostname() == 'zaan':
+            data_path = "/speedy/data/atari"
+        else:
+            data_path = "/misc/vlgscratch2/FergusGroup/wwhitney/data/atari"
         self.filenames = glob.glob(
-            "/speedy/data/atari/{}/{}/images_*".format(
-                game, mode
+            "{}/{}/{}/images_*".format(
+                data_path, game, mode
             ))
         self.image_size = [3, image_width, image_width]
 

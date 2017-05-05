@@ -7,6 +7,7 @@ import os
 
 from util import *
 
+hostname = socket.gethostname()
 # if socket.gethostname() == 'zaan':
 #     dtype = torch.cuda.FloatTensor
 # else:

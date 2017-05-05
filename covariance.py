@@ -144,8 +144,12 @@ def construct_covariance(savedir, model, loader, n, label=""):
 if __name__ == "__main__":
     # dataset = VideoData('.', 5, framerate=2)
     # dataset = VideoData('/speedy/data/urban', 5, framerate=2)
+    if hostname == 'zaan':
+        data_path = '/speedy/data/urban'
+    else:
+        data_path = '/misc/vlgscratch3/FergusGroup/wwhitney/urban'
     train_data, test_data = make_split_datasets(
-        '/speedy/data/urban', 5, framerate=2, image_width=opt.image_width,
+        data_path, 5, framerate=2, image_width=opt.image_width,
         chunk_length=20, train_frac=0.5)
     # dataset = VideoData('/speedy/data/urban/tuesday_4fps.MP4', 5, framerate=2)
     train_loader = DataLoader(train_data,

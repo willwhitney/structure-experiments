@@ -80,16 +80,8 @@ else:
                              opt.image_width).type(dtype)
 
 # --------- load a dataset ---------
-if opt.sanity:
-    train_data, test_data = make_split_datasets(
-        '.', 5, framerate=2, image_width=opt.image_width, chunk_length=50)
-else:
-    if hostname == 'zaan':
-        data_path = '/speedy/data/urban'
-    else:
-        data_path = '/misc/vlgscratch3/FergusGroup/wwhitney/urban'
-    train_data, test_data = make_split_datasets(
-        data_path, 5, framerate=2, image_width=opt.image_width)
+train_data = AtariData(opt.game, 'train', 5, 128)
+test_data = AtariData(opt.game, 'test', 5, 128)
 train_loader = DataLoader(train_data,
                           num_workers=0,
                           batch_size=batch_size,
