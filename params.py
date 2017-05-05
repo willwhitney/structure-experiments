@@ -48,7 +48,6 @@ parser.add_argument('--image_width', default=128, type=int)
 opt = parser.parse_args()
 
 batch_size = opt.batch_size
-opt.save = 'results/' + opt.name
 
 def make_result_folder(location):
     if not os.path.exists(location):
@@ -66,3 +65,10 @@ def make_result_folder(location):
                 exit()
             for f in filelist:
                 os.remove(f)
+
+def write_options(location):
+    with open(location + "/opt.json", 'w') as f:
+        serial_opt = json.dumps(vars(opt), indent=4, sort_keys=True)
+        print(serial_opt)
+        f.write(serial_opt)
+        f.flush()

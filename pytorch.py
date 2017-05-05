@@ -13,6 +13,7 @@ import os
 from PIL import Image
 import progressbar
 import logging
+import shutil
 
 from util import *
 
@@ -37,13 +38,17 @@ if opt.load is not None:
     # we're strictly trying to pick up where we left off
     # load everything just as it was (but rename)
     if opt.resume:
-        setattrs(opt, cp_opt)
+        setattrs(opt, cp_opt, exceptions=['load', 'resume', 'use_loaded_opt'])
         opt.name = cp_opt['name'] + '_'
+        train_data = checkpoint['train_data']
+        test_data = checkpoint['test_data']
 
     # if we want to use the options from the checkpoint, load them in
     # (skip the ones that don't make sense to load)
     if opt.use_loaded_opt:
-        setattrs(opt, cp_opt, exceptions=['name', 'load', 'sanity'])
+        setattrs(opt, cp_opt, exceptions=[
+            'name', 'load', 'sanity', 'resume', 'use_loaded_opt'
+        ])
     batch_size = opt.batch_size
 else:
     i = 0
@@ -51,14 +56,16 @@ else:
                              opt.latent_dim,
                              opt.image_width).type(dtype)
 
+opt.save = 'results/' + opt.name
+
 # -------- take care of logging, cleaning out the folder, etc -------
 make_result_folder(opt.save)
+write_options(opt.save)
 
-with open(opt.save + "/opt.json", 'w') as f:
-    serial_opt = json.dumps(vars(opt), indent=4, sort_keys=True)
-    print(serial_opt)
-    f.write(serial_opt)
-    f.flush()
+# copy over the old results if we're resuming
+if opt.resume:
+    shutil.copyfile(cp_opt['save'] + '/results.csv',
+                    opt.save + '/results.csv')
 
 logging.basicConfig(filename = opt.save + "/results.csv",
                     level = logging.DEBUG,
@@ -67,16 +74,24 @@ logging.debug(("step,loss,nll,divergence,prior divergence,"
                "trans divergence,grad norm,ms/seq,lr"))
 
 # --------- load a dataset ------------------------------------
-if opt.sanity:
-    train_data, test_data = make_split_datasets(
-        '.', 5, framerate=2, image_width=opt.image_width, chunk_length=50)
-else:
-    if hostname == 'zaan':
-        data_path = '/speedy/data/urban'
+if not opt.resume:
+    if opt.sanity:
+        train_data, test_data = make_split_datasets(
+            '.', 5, framerate=2, image_width=opt.image_width, chunk_length=50)
     else:
-        data_path = '/misc/vlgscratch3/FergusGroup/wwhitney/urban'
-    train_data, test_data = make_split_datasets(
-        data_path, 5, framerate=2, image_width=opt.image_width)
+        if hostname == 'zaan':
+            data_path = '/speedy/data/urban'
+        else:
+            data_path = '/misc/vlgscratch3/FergusGroup/wwhitney/urban'
+        train_data, test_data = make_split_datasets(
+            data_path, 5, framerate=2, image_width=opt.image_width)
+
+save_dict = {
+        'train_data': train_data,
+        'test_data': test_data,
+    }
+torch.save(save_dict, opt.save + '/dataset.t7')
+
 train_loader = DataLoader(train_data,
                           num_workers=0,
                           batch_size=batch_size,
@@ -227,16 +242,14 @@ while i < n_steps:
             mean_nll = 0
             save_all_generations(model, sequence, generations)
 
-
-
         save_every = int(1e6)
-        if i >= n_steps or (i % save_every == 0 and i > 0)
+        if i >= n_steps or (i % save_every == 0 and i > 0):
             save_dict = {
                     'model': model,
                     'opt': vars(opt),
                     'i': i,
-                    'train_data': train_data,
-                    'test_data': test_data,
+                    # 'train_data': train_data,
+                    # 'test_data': test_data,
                 }
             torch.save(save_dict, opt.save + '/model.t7')
 
