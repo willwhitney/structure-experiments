@@ -49,3 +49,20 @@ opt = parser.parse_args()
 
 batch_size = opt.batch_size
 opt.save = 'results/' + opt.name
+
+def make_result_folder(location):
+    if not os.path.exists(location):
+        os.makedirs(location)
+    else:
+        filelist = glob.glob(location + "/*")
+        if len(filelist) > 0:
+            clear = query_yes_no(
+                "This network name is already in use. "
+                "Continuing will delete all of the files in the directory.\n"
+                "Files: \n" + "\n".join(filelist) + "\n\n"
+                "Continue?")
+            if not clear:
+                print("Not deleting anything. Quitting instead.")
+                exit()
+            for f in filelist:
+                os.remove(f)

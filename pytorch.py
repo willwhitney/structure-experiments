@@ -27,35 +27,7 @@ from covariance import construct_covariance
 
 print("Tensor type: ", dtype)
 
-if not os.path.exists(opt.save):
-    os.makedirs(opt.save)
-else:
-    filelist = glob.glob(opt.save + "/*")
-    if len(filelist) > 0:
-        clear = query_yes_no(
-            "This network name is already in use. "
-            "Continuing will delete all of the files in the directory.\n"
-            "Files: \n" + "\n".join(filelist) + "\n\n"
-            "Continue?")
-        if not clear:
-            print("Not deleting anything. Quitting instead.")
-            exit()
-        for f in filelist:
-            os.remove(f)
-
-with open(opt.save + "/opt.json", 'w') as f:
-    serial_opt = json.dumps(vars(opt), indent=4, sort_keys=True)
-    print(serial_opt)
-    f.write(serial_opt)
-    f.flush()
-
-logging.basicConfig(filename = opt.save + "/results.csv",
-                    level = logging.DEBUG,
-                    format = "%(message)s")
-logging.debug(("step,loss,nll,divergence,prior divergence,"
-               "trans divergence,grad norm,ms/seq,lr"))
-
-# ------- load the model --------
+# ------- load the model first, as this affects the paths used --------
 if opt.load is not None:
     checkpoint = torch.load('results/' + opt.load + '/model.t7')
     model = checkpoint['model'].type(dtype)
@@ -79,7 +51,22 @@ else:
                              opt.latent_dim,
                              opt.image_width).type(dtype)
 
-# --------- load a dataset ---------
+# -------- take care of logging, cleaning out the folder, etc -------
+make_result_folder(opt.save)
+
+with open(opt.save + "/opt.json", 'w') as f:
+    serial_opt = json.dumps(vars(opt), indent=4, sort_keys=True)
+    print(serial_opt)
+    f.write(serial_opt)
+    f.flush()
+
+logging.basicConfig(filename = opt.save + "/results.csv",
+                    level = logging.DEBUG,
+                    format = "%(message)s")
+logging.debug(("step,loss,nll,divergence,prior divergence,"
+               "trans divergence,grad norm,ms/seq,lr"))
+
+# --------- load a dataset ------------------------------------
 if opt.sanity:
     train_data, test_data = make_split_datasets(
         '.', 5, framerate=2, image_width=opt.image_width, chunk_length=50)
@@ -152,7 +139,7 @@ if opt.sanity:
     k = 10 * batch_size
 else:
     n_steps = int(5e8)
-    k = 100000
+    k = 200000
 
 # make k a multiple of batch_size
 k = (k // batch_size) * batch_size
@@ -203,7 +190,8 @@ while i < n_steps:
         optimizer.step()
 
         progress.update(i%k)
-        if i >= n_steps or (i % k == 0 and i > 0):
+        is_update_time = (i >= n_steps or (i % k == 0 and i > 0))
+        if is_update_time:
             progress.finish()
             clear_progressbar()
 
@@ -231,14 +219,6 @@ while i < n_steps:
             format_string = ",".join(["{:.8e}"]*len(log_values))
             logging.debug(format_string.format(*log_values))
 
-            save_dict = {
-                    'model': model,
-                    'opt': vars(opt),
-                    'i': i,
-                    'train_data': train_data,
-                    'test_data': test_data,
-                }
-            torch.save(save_dict, opt.save + '/model.t7')
             mean_loss = 0
             mean_divergence = 0
             mean_prior_div = 0
@@ -247,7 +227,18 @@ while i < n_steps:
             mean_nll = 0
             save_all_generations(model, sequence, generations)
 
-            progress = progressbar.ProgressBar(max_value=k)
+
+
+        save_every = int(1e6)
+        if i >= n_steps or (i % save_every == 0 and i > 0)
+            save_dict = {
+                    'model': model,
+                    'opt': vars(opt),
+                    'i': i,
+                    'train_data': train_data,
+                    'test_data': test_data,
+                }
+            torch.save(save_dict, opt.save + '/model.t7')
 
         # do this at the beginning, and periodically after
         if i <= batch_size or i == n_steps or (i % 500000 == 0 and i > 0):
@@ -262,6 +253,9 @@ while i < n_steps:
             opt.lr = opt.lr * 0.985
             print("Decaying learning rate to: ", opt.lr)
             set_lr(optimizer, opt.lr)
+
+        if is_update_time:
+            progress = progressbar.ProgressBar(max_value=k)
 
         if i >= n_steps:
             break
