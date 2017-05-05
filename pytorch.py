@@ -185,7 +185,7 @@ while i < n_steps:
 
         kl_penalty = seq_divergence
         if not opt.no_kl_annealing:
-            kl_weight = max(0, min(i / opt.kl_anneal_end, 1))
+            kl_weight = max(0, min(i / opt.kl_anneal_end, 1)) * opt.kl_weight
             kl_penalty = kl_weight * seq_divergence
 
         loss = nll + kl_penalty
@@ -210,14 +210,15 @@ while i < n_steps:
             elapsed_time = progress.end_time - progress.start_time
             elapsed_seconds = elapsed_time.total_seconds()
 
+            batches = k / batch_size
             log_values = (i,
-                          mean_loss / k,
-                          mean_nll / k,
-                          mean_divergence / k,
-                          mean_prior_div / k,
-                          mean_trans_div / k,
-                          mean_grad_norm / k,
-                          elapsed_seconds / k / batch_size * 1000,
+                          mean_loss / batches,
+                          mean_nll / batches,
+                          mean_divergence / batches,
+                          mean_prior_div / batches,
+                          mean_trans_div / batches,
+                          mean_grad_norm / batches,
+                          elapsed_seconds / k * 1000,
                           opt.lr)
             print(("Step: {:8d}, Loss: {:10.3f}, NLL: {:10.3f}, "
                    "Divergence: {:10.3f}, "

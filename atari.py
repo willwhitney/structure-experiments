@@ -91,8 +91,8 @@ test_loader = DataLoader(test_data,
                          batch_size=batch_size,
                          shuffle=True)
                         #   drop_last=True)
-print("Number of training sequences (with overlap): " + str(len(train_data)))
-print("Number of testing sequences (with overlap): " + str(len(test_data)))
+print("Number of training sequences: " + str(len(train_data)))
+print("Number of testing sequences: " + str(len(test_data)))
 
 # ------------------------------------
 
@@ -202,14 +202,15 @@ while i < n_steps:
             elapsed_time = progress.end_time - progress.start_time
             elapsed_seconds = elapsed_time.total_seconds()
 
+            batches = k / batch_size
             log_values = (i,
-                          mean_loss / k,
-                          mean_nll / k,
-                          mean_divergence / k,
-                          mean_prior_div / k,
-                          mean_trans_div / k,
-                          mean_grad_norm / k,
-                          elapsed_seconds / k / batch_size * 1000,
+                          mean_loss / batches,
+                          mean_nll / batches,
+                          mean_divergence / batches,
+                          mean_prior_div / batches,
+                          mean_trans_div / batches,
+                          mean_grad_norm / batches,
+                          elapsed_seconds / k * 1000,
                           opt.lr)
             print(("Step: {:8d}, Loss: {:10.3f}, NLL: {:10.3f}, "
                    "Divergence: {:10.3f}, "
@@ -242,9 +243,9 @@ while i < n_steps:
 
         # do this at the beginning, and periodically after
         if i <= batch_size or i == n_steps or (i % 500000 == 0 and i > 0):
-            construct_covariance(opt.save, model, train_loader, 5000,
+            construct_covariance(opt.save, model, train_loader, 1000,
                                  label="train_" + str(i))
-            construct_covariance(opt.save, model, test_loader, 5000,
+            construct_covariance(opt.save, model, test_loader, 1000,
                                  label="test_" + str(i))
 
         # learning rate decay

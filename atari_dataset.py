@@ -46,7 +46,7 @@ class AtariData(Dataset):
         # return 10
         return len(self.filenames)
 
-# d = AtariData('freeway', 'train', 5, torch.cuda.FloatTensor)
+d = AtariData('freeway', 'train', 5, 128)
 # l = DataLoader(d, num_workers=4, batch_size=32, shuffle=True)
 #
 # single = d[0]
