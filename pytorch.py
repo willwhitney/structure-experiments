@@ -31,8 +31,17 @@ if not os.path.exists(opt.save):
     os.makedirs(opt.save)
 else:
     filelist = glob.glob(opt.save + "/*")
-    for f in filelist:
-        os.remove(f)
+    if len(filelist) > 0:
+        clear = query_yes_no(
+            "This network name is already in use. "
+            "Continuing will delete all of the files in the directory.\n"
+            "Files: \n" + "\n".join(filelist) + "\n\n"
+            "Continue?")
+        if not clear:
+            print("Not deleting anything. Quitting instead.")
+            exit()
+        for f in filelist:
+            os.remove(f)
 
 with open(opt.save + "/opt.json", 'w') as f:
     serial_opt = json.dumps(vars(opt), indent=4, sort_keys=True)
@@ -63,6 +72,7 @@ if opt.load is not None:
     # (skip the ones that don't make sense to load)
     if opt.use_loaded_opt:
         setattrs(opt, cp_opt, exceptions=['name', 'load', 'sanity'])
+    batch_size = opt.batch_size
 else:
     i = 0
     model = IndependentModel(opt.latents,
@@ -72,7 +82,7 @@ else:
 # --------- load a dataset ---------
 if opt.sanity:
     train_data, test_data = make_split_datasets(
-        '.', 5, framerate=2, image_width=opt.image_width, chunk_length=100)
+        '.', 5, framerate=2, image_width=opt.image_width, chunk_length=50)
 else:
     train_data, test_data = make_split_datasets(
         '/speedy/data/urban', 5, framerate=2, image_width=opt.image_width)
@@ -134,18 +144,21 @@ z_var_max = -1
 
 sequence = None
 if opt.sanity:
-    n_steps = 10
-    k = 10
+    n_steps = 10 * batch_size
+    k = 10 * batch_size
 else:
-    n_steps = int(1e7)
-    k = 10000
+    n_steps = int(5e8)
+    k = 100000
+
+# make k a multiple of batch_size
+k = (k // batch_size) * batch_size
 progress = progressbar.ProgressBar(max_value=k)
 while i < n_steps:
     for sequence in train_loader:
         # deal with the last, missized batch until drop_last gets shipped
         if sequence.size(0) != batch_size:
             continue
-        i += 1
+        i += batch_size
 
         sequence.transpose_(0, 1)
         sequence = sequence_input(list(sequence))
@@ -186,7 +199,7 @@ while i < n_steps:
         optimizer.step()
 
         progress.update(i%k)
-        if i == n_steps or (i % k == 0 and i > 0):
+        if i >= n_steps or (i % k == 0 and i > 0):
             progress.finish()
             clear_progressbar()
 
@@ -231,15 +244,16 @@ while i < n_steps:
 
             progress = progressbar.ProgressBar(max_value=k)
 
-        if i == n_steps or (i % 50000 == 0 and i > 0):
-            construct_covariance(opt.save, model, train_loader, 10000,
+        # do this at the beginning, and periodically after
+        if i <= batch_size or i == n_steps or (i % 500000 == 0 and i > 0):
+            construct_covariance(opt.save, model, train_loader, 5000,
                                  label="train_" + str(i))
-            construct_covariance(opt.save, model, test_loader, 10000,
+            construct_covariance(opt.save, model, test_loader, 5000,
                                  label="test_" + str(i))
 
         # learning rate decay
-        # 0.985 every 10K -> ~0.2 at 1,000,000 steps
-        if not opt.no_lr_decay and i % 10000 == 0 and i > 0:
+        # 0.985 every 320K -> ~0.2 at 1,000,000 steps
+        if not opt.no_lr_decay and i % 320000 == 0 and i > 0:
             opt.lr = opt.lr * 0.985
             print("Decaying learning rate to: ", opt.lr)
             set_lr(optimizer, opt.lr)

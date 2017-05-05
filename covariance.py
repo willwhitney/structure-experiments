@@ -22,7 +22,7 @@ from env import *
 from params import *
 from generations import *
 from atari_dataset import AtariData
-from video_dataset import VideoData
+from video_dataset import *
 
 import sklearn.covariance
 
@@ -66,18 +66,20 @@ def construct_covariance(savedir, model, loader, n, label=""):
 
     paired_zs = []
     for seq_zs in zs:
-        for t in range(len(seq_zs) - 1):
-            z = seq_zs[t]
-            z_n = seq_zs[t+1]
-            for first, second in zip(z, z_n):
-                catted = torch.cat([first, second], 0)
-                paired_zs.append(catted)
+        t = random.randint(0, len(seq_zs) - 2)
+        # for t in range(len(seq_zs) - 1):
+        z = seq_zs[t]
+        z_n = seq_zs[t+1]
+        for first, second in zip(z, z_n):
+            catted = torch.cat([first, second], 0)
+            paired_zs.append(catted)
+    zs = None
 
     paired_zs = [z.data for z in paired_zs]
     paired_zs = torch.stack(paired_zs, 1)
-    paired_zs = paired_zs.cpu().transpose(0, 1)
-    numpy_zs = paired_zs.numpy()
-    cov = sklearn.covariance.empirical_covariance(numpy_zs)
+    paired_zs = paired_zs.cpu()
+    paired_zs.transpose_(0, 1)
+    paired_zs = paired_zs.numpy()
 
     z_dim = model.n_latents * model.hidden_dim
 
@@ -85,11 +87,15 @@ def construct_covariance(savedir, model, loader, n, label=""):
     import seaborn
     import pandas as pd
 
-    df = pd.DataFrame(numpy_zs)
+    df = pd.DataFrame(paired_zs)
     corr_df = df.corr()
-    corr = np.array(corr_df)[:z_dim, :z_dim]
+    corr_np = np.array(corr_df)
 
-    plt.figure()
+    # try to free things up?
+    paired_zs = None
+
+    fig = plt.figure()
+    corr = corr_np[:z_dim, :z_dim]
     hm = seaborn.heatmap(corr,
                          xticklabels=model.hidden_dim,
                          yticklabels=model.hidden_dim)
@@ -100,10 +106,11 @@ def construct_covariance(savedir, model, loader, n, label=""):
         plt.plot([location, location], [0, z_dim], color='black', linewidth=0.5)
     name = "{}/autocorr_{}.pdf".format(savedir, label)
     plt.savefig(name)
+    plt.close(fig)
 
 
-    corr = np.array(corr_df)[:z_dim, z_dim:]
-    plt.figure()
+    fig = plt.figure()
+    corr = corr_np[:z_dim, z_dim:]
     hm = seaborn.heatmap(corr,
                          xticklabels=model.hidden_dim,
                          yticklabels=model.hidden_dim)
@@ -115,8 +122,11 @@ def construct_covariance(savedir, model, loader, n, label=""):
     # plt.savefig('results/' + name + '/corr.pdf')
     name = "{}/corr_{}.pdf".format(savedir, label)
     plt.savefig(name)
+    plt.close(fig)
 
-    plt.figure()
+    fig = plt.figure()
+    cov = np.array(df.cov())
+    # cov = sklearn.covariance.empirical_covariance(paired_zs)
     hm = seaborn.heatmap(cov[:z_dim, z_dim:],
                          xticklabels=model.hidden_dim,
                          yticklabels=model.hidden_dim)
@@ -128,13 +138,21 @@ def construct_covariance(savedir, model, loader, n, label=""):
     # plt.savefig('results/' + name + '/cov.pdf')
     name = "{}/cov_{}.pdf".format(savedir, label)
     plt.savefig(name)
+    plt.close(fig)
 
 
 if __name__ == "__main__":
     # dataset = VideoData('.', 5, framerate=2)
-    dataset = VideoData('/speedy/data/urban', 5, framerate=2)
+    # dataset = VideoData('/speedy/data/urban', 5, framerate=2)
+    train_data, test_data = make_split_datasets(
+        '/speedy/data/urban', 5, framerate=2, image_width=opt.image_width,
+        chunk_length=20, train_frac=0.5)
     # dataset = VideoData('/speedy/data/urban/tuesday_4fps.MP4', 5, framerate=2)
-    loader = DataLoader(dataset,
+    train_loader = DataLoader(train_data,
+                        num_workers=0,
+                        batch_size=batch_size,
+                        shuffle=True)
+    test_loader = DataLoader(test_data,
                         num_workers=0,
                         batch_size=batch_size,
                         shuffle=True)
@@ -144,4 +162,7 @@ if __name__ == "__main__":
     cp_opt = checkpoint['opt']
     setattrs(opt, cp_opt, exceptions=['name', 'load', 'sanity'])
 
-    construct_covariance('results/' + opt.load, model, loader, 10000)
+    construct_covariance('results/' + opt.load, model, train_loader, 10000,
+                         label="chunk50_train")
+    construct_covariance('results/' + opt.load, model, test_loader, 10000,
+                         label="chunk50_test")

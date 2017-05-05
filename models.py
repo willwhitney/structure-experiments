@@ -343,7 +343,7 @@ class IndependentModel(nn.Module):
         noise = Variable(torch.zeros(
             latent.size(0), self.hidden_dim).normal_(0, 1).type(dtype))
         for batch_noise in noise.data:
-            batch_noise.div_(batch_noise.norm()).mul_(20)
+            batch_noise.div_(batch_noise.norm()).mul_(15)
 
         for z_i in range(self.n_latents):
             latent = z_const.clone()
