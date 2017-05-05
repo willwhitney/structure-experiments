@@ -7,6 +7,7 @@ import os
 
 from util import *
 
+hostname = socket.gethostname()
 # if socket.gethostname() == 'zaan':
 #     dtype = torch.cuda.FloatTensor
 # else:
@@ -30,7 +31,8 @@ parser.add_argument('--no_lr_decay', action="store_true")
 parser.add_argument('--no_sgld', action="store_true")
 parser.add_argument('--activation', default="tanh")
 parser.add_argument('--no_kl_annealing', action="store_true")
-parser.add_argument('--kl_anneal_end', default=2e6, type=float)
+parser.add_argument('--kl_anneal_end', default=3e6, type=float)
+parser.add_argument('--kl_weight', default=1, type=int)
 parser.add_argument('--output_var', default=0.01, type=float)
 parser.add_argument('--latents', default=3, type=int)
 parser.add_argument('--latent_dim', default=25, type=int)

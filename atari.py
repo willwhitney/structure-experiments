@@ -80,16 +80,8 @@ else:
                              opt.image_width).type(dtype)
 
 # --------- load a dataset ---------
-if opt.sanity:
-    train_data, test_data = make_split_datasets(
-        '.', 5, framerate=2, image_width=opt.image_width, chunk_length=50)
-else:
-    if hostname == 'zaan':
-        data_path = '/speedy/data/urban'
-    else:
-        data_path = '/misc/vlgscratch3/FergusGroup/wwhitney/urban'
-    train_data, test_data = make_split_datasets(
-        data_path, 5, framerate=2, image_width=opt.image_width)
+train_data = AtariData(opt.game, 'train', 5, 128)
+test_data = AtariData(opt.game, 'test', 5, 128)
 train_loader = DataLoader(train_data,
                           num_workers=0,
                           batch_size=batch_size,
@@ -99,8 +91,8 @@ test_loader = DataLoader(test_data,
                          batch_size=batch_size,
                          shuffle=True)
                         #   drop_last=True)
-print("Number of training sequences (with overlap): " + str(len(train_data)))
-print("Number of testing sequences (with overlap): " + str(len(test_data)))
+print("Number of training sequences: " + str(len(train_data)))
+print("Number of testing sequences: " + str(len(test_data)))
 
 # ------------------------------------
 
@@ -185,7 +177,7 @@ while i < n_steps:
 
         kl_penalty = seq_divergence
         if not opt.no_kl_annealing:
-            kl_weight = max(0, min(i / opt.kl_anneal_end, 1)) * opt.kl_weight
+            kl_weight = max(0, min(i / opt.kl_anneal_end, 1))
             kl_penalty = kl_weight * seq_divergence
 
         loss = nll + kl_penalty
@@ -251,9 +243,9 @@ while i < n_steps:
 
         # do this at the beginning, and periodically after
         if i <= batch_size or i == n_steps or (i % 500000 == 0 and i > 0):
-            construct_covariance(opt.save, model, train_loader, 5000,
+            construct_covariance(opt.save, model, train_loader, 1000,
                                  label="train_" + str(i))
-            construct_covariance(opt.save, model, test_loader, 5000,
+            construct_covariance(opt.save, model, test_loader, 1000,
                                  label="test_" + str(i))
 
         # learning rate decay
