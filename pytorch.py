@@ -14,6 +14,7 @@ from PIL import Image
 import progressbar
 import logging
 import shutil
+import time
 
 from util import *
 
@@ -156,6 +157,14 @@ else:
     n_steps = int(5e8)
     k = 200000
 
+cov_start = time.time()
+construct_covariance(opt.save, model, train_loader, 5000,
+                     label="train_" + str(i))
+construct_covariance(opt.save, model, test_loader, 5000,
+                     label="test_" + str(i))
+cov_end = time.time()
+print("Covariance analysis done. Duration: {:.2f}".format(cov_end - cov_start))
+
 # make k a multiple of batch_size
 k = (k // batch_size) * batch_size
 progress = progressbar.ProgressBar(max_value=k)
@@ -254,7 +263,7 @@ while i < n_steps:
             torch.save(save_dict, opt.save + '/model.t7')
 
         # do this at the beginning, and periodically after
-        if i <= batch_size or i == n_steps or (i % 500000 == 0 and i > 0):
+        if i == n_steps or (i % 500000 == 0 and i > 0):
             construct_covariance(opt.save, model, train_loader, 5000,
                                  label="train_" + str(i))
             construct_covariance(opt.save, model, test_loader, 5000,

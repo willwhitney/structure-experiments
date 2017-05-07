@@ -108,7 +108,9 @@ class VAEModel(nn.Module):
         return generations
 
 class IndependentModel(nn.Module):
-    def __init__(self, n_latents, hidden_dim, img_size):
+    def __init__(self, n_latents, hidden_dim, img_size,
+                 transition=Transition, first_inference=DCGANFirstInference,
+                 inference=DCGANInference, generator=DCGANGenerator):
         super(IndependentModel, self).__init__()
         self.n_latents = n_latents
         self.img_size = img_size
@@ -126,7 +128,7 @@ class IndependentModel(nn.Module):
         image_dim = [3, self.img_size, self.img_size]
 
         # trans = Transition(self.hidden_dim)
-        self.transitions = nn.ModuleList([Transition(self.hidden_dim)
+        self.transitions = nn.ModuleList([transition(self.hidden_dim)
                                           for _ in range(n_latents)])
         # self.first_inference = FirstInference(prod(image_dim), total_z_dim)
         # self.inference = Inference(prod(image_dim), total_z_dim)
@@ -136,9 +138,9 @@ class IndependentModel(nn.Module):
         # self.inference = ConvInference(image_dim, total_z_dim)
         # self.generator = ConvGenerator(total_z_dim, image_dim)
 
-        self.first_inference = DCGANFirstInference(image_dim, total_z_dim)
-        self.inference = DCGANInference(image_dim, total_z_dim)
-        self.generator = DCGANGenerator(total_z_dim, image_dim)
+        self.first_inference = first_inference(image_dim, total_z_dim)
+        self.inference = inference(image_dim, total_z_dim)
+        self.generator = generator(total_z_dim, image_dim)
 
     def predict_latent(self, latent):
         z_prior = []

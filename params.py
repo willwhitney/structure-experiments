@@ -39,7 +39,7 @@ parser.add_argument('--latent_dim', default=25, type=int)
 
 parser.add_argument('--game', default='freeway')
 
-parser.add_argument('--colors', default='white',
+parser.add_argument('--colors', default='random',
                     help="color of bouncing balls. white | vary | random")
 parser.add_argument('--balls', default=1, type=int,
                     help="number of balls in the environment")

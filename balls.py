@@ -53,7 +53,11 @@ else:
     i = 0
     model = IndependentModel(opt.latents,
                              opt.latent_dim,
-                             opt.image_width).type(dtype)
+                             opt.image_width,
+                             transition=TinyTransition,
+                             first_inference=TinyDCGANFirstInference,
+                             inference=TinyDCGANInference,
+                             generator=TinyDCGANGenerator).type(dtype)
 
 opt.save = 'results/' + opt.name
 
@@ -73,8 +77,8 @@ logging.debug(("step,loss,nll,divergence,prior divergence,"
                "trans divergence,grad norm,ms/seq,lr"))
 
 # --------- load a dataset ---------
-train_data = AtariData(opt.game, 'train', 5, opt.image_width)
-test_data = AtariData(opt.game, 'test', 5, opt.image_width)
+train_data = BounceData(10, opt.balls, opt.colors, opt.image_width)
+test_data = BounceData(10, opt.balls, opt.colors, opt.image_width)
 train_loader = DataLoader(train_data,
                           num_workers=0,
                           batch_size=batch_size,
@@ -133,16 +137,16 @@ z_var_max = -1
 
 sequence = None
 if opt.sanity:
-    n_steps = 10 * batch_size
-    k = 10 * batch_size
+    n_steps = 100 * batch_size
+    k = 100 * batch_size
 else:
     n_steps = int(5e8)
     k = 100000
 
 cov_start = time.time()
-construct_covariance(opt.save, model, train_loader, 5000,
+construct_covariance(opt.save, model, train_loader, 100,
                      label="train_" + str(i))
-construct_covariance(opt.save, model, test_loader, 5000,
+construct_covariance(opt.save, model, test_loader, 100,
                      label="test_" + str(i))
 cov_end = time.time()
 print("Covariance analysis done. Duration: {:.2f}".format(cov_end - cov_start))
@@ -270,6 +274,7 @@ while i < n_steps:
 
         if is_update_time:
             progress = progressbar.ProgressBar(max_value=k)
+
 
         if i >= n_steps:
             break

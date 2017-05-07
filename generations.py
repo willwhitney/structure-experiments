@@ -117,7 +117,7 @@ def save_independent_resample(model, priming):
         samples = model.generate_variations(priming, 20)
         samples = [[x.data for x in sample_row]
                    for sample_row in samples]
-        for j in range(5):
+        for j in range(10):
             image = [[x[j] #.view(3,image_width,image_width)
                       for x in sample_row]
                       for sample_row in samples]

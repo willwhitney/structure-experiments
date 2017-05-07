@@ -1,4 +1,6 @@
 import torch
+from torch.utils.data import Dataset, DataLoader
+
 import math
 import random
 import numpy as np
@@ -23,17 +25,20 @@ def random_color():
 # fixed_color = [random.uniform(0, 1) for _ in range(3)]
 fixed_colors = [[0, 0, 1],
                 [0, 1, 0],
-                [1, 0, 0]]
+                [1, 0, 0],
+                [0, 1, 1],
+                [1, 1, 0],
+                [1, 0, 1]]
 # fixed_colors = [random_color() for _ in range(4)]
 
 class DataGenerator:
-    def __init__(self):
-        self.size = 6
+    def __init__(self, balls, colors, image_width):
+        self.size = image_width
         self.image_size = [3, self.size, self.size]
-        self.n_things = opt.balls
-        self.max_speed = 1
+        self.n_things = balls
+        self.max_speed = 2
 
-        self.colors = opt.colors
+        self.colors = colors
         # 'vary'
         # self.colors = 'random'
         # self.colors = 'white'
@@ -91,11 +96,27 @@ class DataGenerator:
         return self
 
     def render(self):
-        canvas = torch.zeros(3, self.size, self.size)
+        canvas = torch.zeros(*self.image_size)
         for thing in self.things:
             canvas[:, thing.loc[0], thing.loc[1]] = torch.Tensor(thing.color)
         return canvas
 
+class BounceData(Dataset):
+    def __init__(self, seq_len, balls, colors, image_width):
+        self.seq_len = seq_len
+        self.gen = DataGenerator(balls, colors, image_width)
+
+
+    def __getitem__(self, i):
+        canvas = torch.zeros(self.seq_len, *self.gen.image_size)
+        canvas[0].copy_(self.gen.start().render())
+        for t in range(1, self.seq_len):
+            canvas[t].copy_(self.gen.step().render())
+        return canvas
+
+
+    def __len__(self):
+        return 1000000
 
 # gen = DataGenerator()
 # gen.start()
