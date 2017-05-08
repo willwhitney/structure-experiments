@@ -55,8 +55,11 @@ else:
                              opt.latent_dim,
                              opt.image_width,
                              transition=TinyTransition,
+                            #  first_inference=TinyDCGANFirstInference,
                              first_inference=TinyDCGANFirstInference,
+                            #  inference=TinyDCGANInference,
                              inference=TinyDCGANInference,
+                            #  generator=TinyDCGANGenerator).type(dtype)
                              generator=TinyDCGANGenerator).type(dtype)
 
 opt.save = 'results/' + opt.name
@@ -64,6 +67,7 @@ opt.save = 'results/' + opt.name
 # -------- take care of logging, cleaning out the folder, etc -------
 make_result_folder(opt.save)
 write_options(opt.save)
+
 
 # copy over the old results if we're resuming
 if opt.resume:
@@ -77,8 +81,8 @@ logging.debug(("step,loss,nll,divergence,prior divergence,"
                "trans divergence,grad norm,ms/seq,lr"))
 
 # --------- load a dataset ---------
-train_data = BounceData(10, opt.balls, opt.colors, opt.image_width)
-test_data = BounceData(10, opt.balls, opt.colors, opt.image_width)
+train_data = BounceData(5, opt.balls, opt.colors, opt.image_width)
+test_data = BounceData(5, opt.balls, opt.colors, opt.image_width)
 train_loader = DataLoader(train_data,
                           num_workers=0,
                           batch_size=batch_size,
@@ -144,9 +148,9 @@ else:
     k = 100000
 
 cov_start = time.time()
-construct_covariance(opt.save, model, train_loader, 100,
+construct_covariance(opt.save, model, train_loader, 5000,
                      label="train_" + str(i))
-construct_covariance(opt.save, model, test_loader, 100,
+construct_covariance(opt.save, model, test_loader, 5000,
                      label="test_" + str(i))
 cov_end = time.time()
 print("Covariance analysis done. Duration: {:.2f}".format(cov_end - cov_start))
@@ -180,10 +184,10 @@ while i < n_steps:
         # z_var_min = min(var_min, z_var_min)
         # z_var_max = max(var_max, z_var_max)
 
-        kl_penalty = seq_divergence
+        kl_penalty = seq_divergence * opt.kl_weight
         if not opt.no_kl_annealing:
             kl_weight = max(0, min(i / opt.kl_anneal_end, 1))
-            kl_penalty = kl_weight * seq_divergence
+            kl_penalty = kl_weight * kl_penalty
 
         loss = nll + kl_penalty
         mean_loss += loss.data[0]
@@ -229,14 +233,14 @@ while i < n_steps:
             format_string = ",".join(["{:.8e}"]*len(log_values))
             logging.debug(format_string.format(*log_values))
 
-            save_dict = {
-                    'model': model,
-                    'opt': vars(opt),
-                    'i': i,
-                    # 'train_data': train_data,
-                    # 'test_data': test_data,
-                }
-            torch.save(save_dict, opt.save + '/model.t7')
+            # save_dict = {
+            #         'model': model,
+            #         'opt': vars(opt),
+            #         'i': i,
+            #         # 'train_data': train_data,
+            #         # 'test_data': test_data,
+            #     }
+            # torch.save(save_dict, opt.save + '/model.t7')
             mean_loss = 0
             mean_divergence = 0
             mean_prior_div = 0
@@ -256,10 +260,10 @@ while i < n_steps:
                     # 'train_data': train_data,
                     # 'test_data': test_data,
                 }
-            torch.save(save_dict, opt.save + '/model.t7')
+            atomic_save(save_dict, opt.save + '/model.t7')
 
         # do this at the beginning, and periodically after
-        if i == n_steps or (i % 500000 == 0 and i > 0):
+        if i == n_steps or (i % 1000000 == 0 and i > 0):
             construct_covariance(opt.save, model, train_loader, 5000,
                                  label="train_" + str(i))
             construct_covariance(opt.save, model, test_loader, 5000,
