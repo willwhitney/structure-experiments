@@ -32,7 +32,7 @@ class Video(list):
         self.image_size = image_size
         self.fps = fps(path)
 
-        v = imageio.get_reader(path, 'avbin')
+        v = imageio.get_reader(path, 'ffmpeg')
         for frame in v:
             resized = scipy.misc.imresize(frame, self.image_size[1:])
             resized = torch.from_numpy(resized).float()

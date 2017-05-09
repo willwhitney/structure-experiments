@@ -358,6 +358,42 @@ class IndependentModel(nn.Module):
                 generations[z_i].append(self.generator(latent)[0].cpu())
         return generations
 
+    def generate_independent_posterior(self, sequence):
+        for x in sequence:
+            x.volatile = True
+
+        posteriors = []
+        posterior_generations = []
+        inferred_z_post = self.first_inference(sequence[0])
+
+        cat_prior = self.z1_prior
+        for t in range(len(sequence)):
+            posteriors.append(inferred_z_post[0])
+            z_sample = sample((inferred_z_post[0], inferred_z_post[1] / 100))
+            gen_dist = self.generator(z_sample)
+            posterior_generations.append(gen_dist[0].cpu())
+
+            if t < len(sequence) - 1:
+                cat_prior = self.predict_latent(z_sample)
+                inferred_z_post = self.inference(sequence[t+1],
+                                                 cat_prior[0])
+
+        priming_steps = 2
+        all_generations = [posterior_generations]
+        for l in range(self.n_latents):
+            for t in range(priming_steps, len(sequence)):
+                current_gen = [posterior_generations[i]
+                               for i in range(priming_steps)]
+
+                z = posteriors[0].clone()
+                start, end = l * self.hidden_dim, (l+1) * self.hidden_dim
+                z[:, start : end].data.copy_(posteriors[t][start : end])
+                gen_dist = self.generator(z)
+                current_gen.append(gen_dist[0].cpu())
+            all_generations.append(current_gen)
+        return all_generations
+
+
 
 class MSEModel(nn.Module):
     def __init__(self, img_size):

@@ -82,8 +82,10 @@ if not opt.resume:
     else:
         if hostname == 'zaan':
             data_path = '/speedy/data/urban'
+            # data_path = '/speedy/data/urban/5th_ave'
         else:
             data_path = '/misc/vlgscratch3/FergusGroup/wwhitney/urban'
+            # data_path = '/misc/vlgscratch3/FergusGroup/wwhitney/urban/5th_ave'
         train_data, test_data = make_split_datasets(
             data_path, 5, framerate=2, image_width=opt.image_width)
 
