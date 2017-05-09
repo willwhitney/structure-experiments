@@ -280,7 +280,8 @@ class IndependentModel(nn.Module):
             latent = starting_latent.clone()
             trans = self.transitions[z_i]
             for t in range(steps - priming_steps):
-                previous = latent[:, z_i*self.hidden_dim : (z_i+1)*self.hidden_dim].clone()
+                previous = latent[:,
+                                  z_i*self.hidden_dim : (z_i+1)*self.hidden_dim].clone()
                 predicted_z = trans(previous)
 
                 if sampling:

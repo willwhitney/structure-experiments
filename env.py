@@ -16,11 +16,16 @@ class Thing:
         self.loc = loc
         self.vel = vel
 
+def normalize_color(c):
+    if type(c) == list:
+        c = torch.Tensor(c)
+    c = c / c.norm()
+    return list(c)
+
 def random_color():
     color = torch.Tensor(3).uniform_(0,1)
-    if sum(color) < 1:
-        color = color / sum(color)
-    return list(color)
+    return normalize_color(color)
+
 
 # fixed_color = [random.uniform(0, 1) for _ in range(3)]
 fixed_colors = [[0, 0, 1],
@@ -29,6 +34,7 @@ fixed_colors = [[0, 0, 1],
                 [0, 1, 1],
                 [1, 1, 0],
                 [1, 0, 1]]
+fixed_colors = [normalize_color(c) for c in fixed_colors]
 # fixed_colors = [random_color() for _ in range(4)]
 
 class DataGenerator:
@@ -36,7 +42,7 @@ class DataGenerator:
         self.size = image_width
         self.image_size = [3, self.size, self.size]
         self.n_things = balls
-        self.max_speed = 2
+        self.max_speed = 1
 
         self.colors = colors
         # 'vary'

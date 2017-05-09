@@ -7,6 +7,7 @@ import math
 import matplotlib.pyplot as plt
 import imageio
 import sys
+import shutil
 
 def is_sequence(arg):
     return (not hasattr(arg, "strip") and
@@ -282,3 +283,8 @@ def query_yes_no(question, default="yes"):
         else:
             sys.stdout.write("Please respond with 'yes' or 'no' "
                              "(or 'y' or 'n').\n")
+
+def atomic_save(obj, path):
+    tmp_path = path + '.tmp'
+    torch.save(obj, tmp_path)
+    shutil.move(tmp_path, path)

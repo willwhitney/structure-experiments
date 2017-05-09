@@ -196,10 +196,10 @@ while i < n_steps:
         # z_var_min = min(var_min, z_var_min)
         # z_var_max = max(var_max, z_var_max)
 
-        kl_penalty = seq_divergence
+        kl_penalty = seq_divergence * opt.kl_weight
         if not opt.no_kl_annealing:
-            kl_weight = max(0, min(i / opt.kl_anneal_end, 1)) * opt.kl_weight
-            kl_penalty = kl_weight * seq_divergence
+            kl_weight = max(0, min(i / opt.kl_anneal_end, 1))
+            kl_penalty = kl_weight * kl_penalty
 
         loss = nll + kl_penalty
         mean_loss += loss.data[0]
@@ -262,10 +262,10 @@ while i < n_steps:
                     # 'train_data': train_data,
                     # 'test_data': test_data,
                 }
-            torch.save(save_dict, opt.save + '/model.t7')
+            atomic_save(save_dict, opt.save + '/model.t7')
 
         # do this at the beginning, and periodically after
-        if i == n_steps or (i % 500000 == 0 and i > 0):
+        if i == n_steps or (i % 1000000 == 0 and i > 0):
             construct_covariance(opt.save, model, train_loader, 5000,
                                  label="train_" + str(i))
             construct_covariance(opt.save, model, test_loader, 5000,
