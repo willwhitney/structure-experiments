@@ -382,13 +382,13 @@ class IndependentModel(nn.Module):
         priming_steps = 2
         all_generations = [posterior_generations]
         for l in range(self.n_latents):
-            for t in range(priming_steps, len(sequence)):
-                current_gen = [posterior_generations[i]
-                               for i in range(priming_steps)]
+            z = posteriors[1].clone()
+            current_gen = [posterior_generations[i]
+                           for i in range(priming_steps)]
 
-                z = posteriors[0].clone()
+            for t in range(priming_steps, len(sequence)):
                 start, end = l * self.hidden_dim, (l+1) * self.hidden_dim
-                z[:, start : end].data.copy_(posteriors[t][start : end])
+                z[:, start : end].data.copy_(posteriors[t].data[:, start : end])
                 gen_dist = self.generator(z)
                 current_gen.append(gen_dist[0].cpu())
             all_generations.append(current_gen)

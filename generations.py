@@ -18,6 +18,7 @@ def save_all_generations(model, sequence, generations):
     save_independent_gen(model, priming)
     save_independent_resample(model, priming)
     save_interpolation(model, priming)
+    save_single_replacement(model, sequence)
 
 def save_posterior(model, sequence, generations):
     # save some results from the latest batch
@@ -162,7 +163,7 @@ def save_single_replacement(model, sequence):
                   for x in sample_row]
                   for sample_row in samples]
         save_tensors_image(
-            opt.save + 'ind_replace_' + str(j) + '.png',
+            opt.save + '/ind_replace_' + str(j) + '.png',
             image)
         stacked = [image_tensor([image[i][t] for i in range(len(image))])
                    for t in range(len(image[0]))]
