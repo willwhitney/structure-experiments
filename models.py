@@ -386,8 +386,8 @@ class IndependentModel(nn.Module):
             current_gen = [posterior_generations[i]
                            for i in range(priming_steps)]
 
+            start, end = l * self.hidden_dim, (l+1) * self.hidden_dim
             for t in range(priming_steps, len(sequence)):
-                start, end = l * self.hidden_dim, (l+1) * self.hidden_dim
                 z[:, start : end].data.copy_(posteriors[t].data[:, start : end])
                 gen_dist = self.generator(z)
                 current_gen.append(gen_dist[0].cpu())

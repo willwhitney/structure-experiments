@@ -58,6 +58,7 @@ else:
                              opt.image_width).type(dtype)
 
 opt.save = 'results/' + opt.name
+print(model)
 
 # -------- take care of logging, cleaning out the folder, etc -------
 make_result_folder(opt.save)
@@ -138,8 +139,6 @@ def sequence_input(seq):
 optimizer = optim.Adam(
     model.parameters(),
     lr=opt.lr)
-
-print(model)
 
 mean_loss = 0
 mean_divergence = 0

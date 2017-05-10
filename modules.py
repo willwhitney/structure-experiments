@@ -56,7 +56,7 @@ else:
 
 eps = 1e-2
 class Transition(nn.Module):
-    def __init__(self, hidden_dim, layers=4):
+    def __init__(self, hidden_dim, layers=8):
         super(Transition, self).__init__()
         self.dim = hidden_dim
 
@@ -618,13 +618,14 @@ class TinyDCGANFirstInference(nn.Module):
         ndf = 64
         self.planes = [ndf,
                        ndf * 2,
+                       ndf * 4,
                        ndf * 4]
-        self.kernels = [4, 4, 4]
-        self.strides = [2, 2, 1]
+        self.kernels = [3, 3, 3, 3]
+        self.strides = [2, 2, 2, 1]
         if input_dims[-1] >= 16:
-            self.pads = [1, 1, 0]
+            self.pads = [1, 1, 0, 0]
         else:
-            self.pads = [1, 1, 1]
+            self.pads = [1, 1, 1, 1]
 
         self.out_dims = [input_dims]
         for l in range(len(self.planes)):
@@ -682,13 +683,14 @@ class TinyDCGANInference(nn.Module):
         ndf = 64
         self.planes = [ndf,
                        ndf * 2,
+                       ndf * 4,
                        ndf * 4]
-        self.kernels = [4, 4, 4]
-        self.strides = [2, 2, 1]
+        self.kernels = [3, 3, 3, 3]
+        self.strides = [2, 2, 2, 1]
         if input_dims[-1] >= 16:
-            self.pads = [1, 1, 0]
+            self.pads = [1, 1, 0, 0]
         else:
-            self.pads = [1, 1, 1]
+            self.pads = [1, 1, 1, 1]
 
         self.out_dims = [input_dims]
         for l in range(len(self.planes)):
@@ -755,18 +757,20 @@ class TinyDCGANGenerator(nn.Module):
         # DCGAN numbers
         ngf = 64
         self.planes = [None,
+                       ngf * 4,
                        ngf * 2,
                        ngf,
                        output_dims[0] * 2]
-        self.kernels = [None, 4, 4, 4]
+        self.kernels = [None, 3, 3, 3, 3]
         if output_dims[-1] >= 16:
-            self.pads = [None, 0, 1, 1]
+            self.pads = [None, 0, 1, 1, 1]
         else:
-            self.pads = [None, 1, 1, 1]
-        self.strides = [None, 1, 2, 2]
+            self.pads = [None, 1, 1, 1, 1]
+        self.strides = [None, 1, 1, 1, 1]
 
 
         self.in_dims = [output_dims[1:]]
+        # self.in_dims = [(7,7)]
         for l in range(len(self.planes) - 1, 0, -1):
             in_dim = conv_transpose_in_dim(*self.in_dims[0],
                                  self.kernels[l],
@@ -780,6 +784,7 @@ class TinyDCGANGenerator(nn.Module):
             nn.Linear(hidden_dim, self.planes[0] * prod(self.in_dims[0]))])
         # import pdb; pdb.set_trace()
 
+        print("Generator: ", self.in_dims)
         self.convs = nn.ModuleList()
 
         # print(self.in_dims)
@@ -843,6 +848,8 @@ class GaussianKLD(nn.Module):
 
 class GaussianLL(nn.Module):
     def forward(self, p, target):
+        # print(p[0].size())
+        # print(target.size())
         (mu, sigma) = p
         mu = batch_flatten(mu)
         sigma = batch_flatten(sigma)

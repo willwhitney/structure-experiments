@@ -54,7 +54,7 @@ else:
     model = IndependentModel(opt.latents,
                              opt.latent_dim,
                              opt.image_width,
-                             transition=TinyTransition,
+                             transition=Transition,
                             #  first_inference=TinyDCGANFirstInference,
                              first_inference=TinyDCGANFirstInference,
                             #  inference=TinyDCGANInference,

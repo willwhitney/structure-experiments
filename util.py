@@ -242,9 +242,10 @@ def set_lr(optimizer, lr):
 
 def show(img_tensor):
     output_tensor = img_tensor.transpose(0,1).transpose(1,2)
-    plt.figure()
+    f = plt.figure()
     plt.imshow(output_tensor.numpy())
     plt.show()
+    plt.close(f)
 
 def setattrs(obj, attr_dict, exceptions=[]):
     for key in attr_dict:
