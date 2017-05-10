@@ -81,10 +81,10 @@ if not opt.resume:
             '.', 5, framerate=2, image_width=opt.image_width, chunk_length=50)
     else:
         if hostname == 'zaan':
-            data_path = '/speedy/data/urban'
+            data_path = '/speedy/data/' + opt.data
             # data_path = '/speedy/data/urban/5th_ave'
         else:
-            data_path = '/misc/vlgscratch3/FergusGroup/wwhitney/urban'
+            data_path = '/misc/vlgscratch3/FergusGroup/wwhitney/' + opt.data
             # data_path = '/misc/vlgscratch3/FergusGroup/wwhitney/urban/5th_ave'
         train_data, test_data = make_split_datasets(
             data_path, 5, framerate=2, image_width=opt.image_width)
@@ -262,10 +262,10 @@ while i < n_steps:
                     # 'train_data': train_data,
                     # 'test_data': test_data,
                 }
-            atomic_save(save_dict, opt.save + '/model.t7')
+            torch.save(save_dict, opt.save + '/model.t7')
 
         # do this at the beginning, and periodically after
-        if i == n_steps or (i % 1000000 == 0 and i > 0):
+        if i == n_steps or (i % 500000 == 0 and i > 0):
             construct_covariance(opt.save, model, train_loader, 5000,
                                  label="train_" + str(i))
             construct_covariance(opt.save, model, test_loader, 5000,
