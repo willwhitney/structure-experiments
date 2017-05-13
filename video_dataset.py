@@ -12,16 +12,27 @@ import random
 def fps(path):
     if path.find('1fps') >= 0:
         return 1
+    elif path.find('2fps') >= 0:
+        return 2
     elif path.find('4fps') >= 0:
         return 4
     else:
-        return 2
+        return 30
 
 def get_videos(directory):
-    if directory[-4:].lower() == '.mp4':
-        filenames = [directory]
-    else:
-        filenames = glob.glob("{}/*.MP4".format(directory))
+    video_formats = ['MP4', 'mp4', 'avi']
+    filenames = []
+    for form in video_formats:
+        if directory[-4:].lower() == '.' + form.lower():
+            filenames.append(directory)
+            break
+        else:
+            form_filenames = glob.glob("{}/*.{}".format(directory, form))
+            filenames.extend(form_filenames)
+            # form_filenames = glob.glob("{}/camera3*.{}".format(directory, form))
+            # filenames.extend(form_filenames)
+            # form_filenames = glob.glob("{}/camera5*.{}".format(directory, form))
+            # filenames.extend(form_filenames)
     return filenames
 
 class Video(list):
@@ -156,8 +167,27 @@ class ChunkData(VideoData):
 # from util import *
 # v = Video('output.MP4', [3, 128, 128])
 
+
+
 # data = VideoData('/speedy/data/urban', 5)
 # for i, d in enumerate(data):
 #     print(i)
 
 # loader = DataLoader(data, num_workers = 0, batch_size = 32, shuffle = True)
+
+
+
+# data_path = '/misc/vlgscratch3/FergusGroup/wwhitney/soccer'
+# data_path = '/speedy/data/soccer'
+
+# data_path = '/misc/vlgscratch3/FergusGroup/wwhitney/basketball'
+# train_data, test_data = make_split_datasets(data_path, 5, framerate=15, chunk_length=50)
+#
+# print("Number of training sequences (with overlap): " + str(len(train_data)))
+# print("Number of testing sequences (with overlap): " + str(len(test_data)))
+#
+# save_dict = {
+#         'train_data': train_data,
+#         'test_data': test_data,
+#     }
+# torch.save(save_dict, data_path + '/derp.t7')

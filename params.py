@@ -24,8 +24,9 @@ parser.add_argument('--load', default=None)
 parser.add_argument('--use_loaded_opt', action="store_true")
 parser.add_argument('--resume', action="store_true")
 
-parser.add_argument('--data', default='urban/12th_st')
+parser.add_argument('--data', default='urban/5th_ave')
 parser.add_argument('--batch_size', default=100, type=int)
+parser.add_argument('--fps', default=4, type=int)
 
 parser.add_argument('--lr', default=3e-4, type=float)
 parser.add_argument('--no_lr_decay', action="store_true")

@@ -83,6 +83,8 @@ logging.debug(("step,loss,nll,divergence,prior divergence,"
 # --------- load a dataset ---------
 train_data = BounceData(5, opt.balls, opt.colors, opt.image_width)
 test_data = BounceData(5, opt.balls, opt.colors, opt.image_width)
+# train_data = HorizontalBounceData(5, opt.balls, opt.colors, opt.image_width)
+# test_data = HorizontalBounceData(5, opt.balls, opt.colors, opt.image_width)
 train_loader = DataLoader(train_data,
                           num_workers=0,
                           batch_size=batch_size,

@@ -41,8 +41,12 @@ if opt.load is not None:
     if opt.resume:
         setattrs(opt, cp_opt, exceptions=['load', 'resume', 'use_loaded_opt'])
         opt.name = cp_opt['name'] + '_'
-        train_data = checkpoint['train_data']
-        test_data = checkpoint['test_data']
+
+        data_path = 'results/' + opt.load + '/dataset.t7'
+        print("Loading stored dataset from {}".format(data_path))
+        data_checkpoint = torch.load(data_path)
+        train_data = data_checkpoint['train_data']
+        test_data = data_checkpoint['test_data']
 
     # if we want to use the options from the checkpoint, load them in
     # (skip the ones that don't make sense to load)
@@ -79,7 +83,7 @@ logging.debug(("step,loss,nll,divergence,prior divergence,"
 if not opt.resume:
     if opt.sanity:
         train_data, test_data = make_split_datasets(
-            '.', 5, framerate=2, image_width=opt.image_width, chunk_length=50)
+            '.', 5, framerate=opt.fps, image_width=opt.image_width, chunk_length=50)
     else:
         if hostname == 'zaan':
             data_path = '/speedy/data/' + opt.data
@@ -87,14 +91,22 @@ if not opt.resume:
         else:
             data_path = '/misc/vlgscratch3/FergusGroup/wwhitney/' + opt.data
             # data_path = '/misc/vlgscratch3/FergusGroup/wwhitney/urban/5th_ave'
-        train_data, test_data = make_split_datasets(
-            data_path, 5, framerate=2, image_width=opt.image_width)
 
-save_dict = {
-        'train_data': train_data,
-        'test_data': test_data,
-    }
-torch.save(save_dict, opt.save + '/dataset.t7')
+        if not data_path[-3:] == '.t7':
+            data_path = data_path + '/dataset.t7'
+
+        print("Loading stored dataset from {}".format(data_path))
+        data_checkpoint = torch.load(data_path)
+        train_data = data_checkpoint['train_data']
+        test_data = data_checkpoint['test_data']
+        # train_data, test_data = make_split_datasets(
+        #     data_path, 5, framerate=2, image_width=opt.image_width)
+
+# save_dict = {
+#         'train_data': train_data,
+#         'test_data': test_data,
+#     }
+# torch.save(save_dict, opt.save + '/dataset.t7')
 
 train_loader = DataLoader(train_data,
                           num_workers=0,
@@ -159,9 +171,9 @@ else:
     k = 200000
 
 cov_start = time.time()
-construct_covariance(opt.save, model, train_loader, 5000,
+construct_covariance(opt.save, model, train_loader, 2000,
                      label="train_" + str(i))
-construct_covariance(opt.save, model, test_loader, 5000,
+construct_covariance(opt.save, model, test_loader, 2000,
                      label="test_" + str(i))
 cov_end = time.time()
 print("Covariance analysis done. Duration: {:.2f}".format(cov_end - cov_start))
@@ -265,9 +277,9 @@ while i < n_steps:
 
         # do this at the beginning, and periodically after
         if i == n_steps or (i % 500000 == 0 and i > 0):
-            construct_covariance(opt.save, model, train_loader, 5000,
+            construct_covariance(opt.save, model, train_loader, 2000,
                                  label="train_" + str(i))
-            construct_covariance(opt.save, model, test_loader, 5000,
+            construct_covariance(opt.save, model, test_loader, 2000,
                                  label="test_" + str(i))
 
         # learning rate decay

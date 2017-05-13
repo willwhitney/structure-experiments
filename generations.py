@@ -131,8 +131,8 @@ def save_interpolation(model, priming):
         p.volatile = True
 
     # save samples interpolating between noise near the current latent
-    if isinstance(model, IndependentModel):
-        samples = model.generate_interpolations(priming, 20)
+    # if isinstance(model, IndependentModel):
+    #     samples = model.generate_interpolations(priming, 20)
 
     samples = model.generate_interpolations(priming, 50)
     samples = [[x.data for x in sample_row]

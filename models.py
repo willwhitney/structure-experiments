@@ -322,7 +322,7 @@ class IndependentModel(nn.Module):
                 generations[z_i].append(self.generator(latent)[0].cpu())
         return generations
 
-    def generate_interpolations(self, priming, steps):
+    def generate_interpolations(self, priming, steps, scale=15):
         priming_steps = len(priming)
         # generations = [[] for _ in range(self.n_latents)]
 
@@ -346,7 +346,7 @@ class IndependentModel(nn.Module):
         noise = Variable(torch.zeros(
             latent.size(0), self.hidden_dim).normal_(0, 1).type(dtype))
         for batch_noise in noise.data:
-            batch_noise.div_(batch_noise.norm()).mul_(15)
+            batch_noise.div_(batch_noise.norm()).mul_(scale)
 
         for z_i in range(self.n_latents):
             latent = z_const.clone()

@@ -56,7 +56,7 @@ else:
 
 eps = 1e-2
 class Transition(nn.Module):
-    def __init__(self, hidden_dim, layers=4):
+    def __init__(self, hidden_dim, layers=8):
         super(Transition, self).__init__()
         self.dim = hidden_dim
 
