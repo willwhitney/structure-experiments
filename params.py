@@ -38,6 +38,7 @@ parser.add_argument('--kl_weight', default=1, type=int)
 parser.add_argument('--output_var', default=0.01, type=float)
 parser.add_argument('--latents', default=3, type=int)
 parser.add_argument('--latent_dim', default=25, type=int)
+parser.add_argument('--trans_layers', default=4, type=int)
 
 parser.add_argument('--game', default='freeway')
 

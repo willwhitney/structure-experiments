@@ -8,6 +8,7 @@ import glob
 import os
 import math
 import random
+import uuid
 
 def fps(path):
     if path.find('1fps') >= 0:
@@ -57,6 +58,40 @@ class VideoChunk(list):
         self.extend(frames)
         self.fps = framerate
 
+def load_wrap(f):
+    def wrapper(self, *args, **kwargs):
+        # print("Running the wrapper!")
+        # print(self)
+        # import ipdb; ipdb.set_trace()
+        self.frames = torch.load(self.path)
+        result = f(self, *args, **kwargs)
+        self.frames = None
+        return result
+    return wrapper
+
+class DiskVideoChunk():
+    def __init__(self, frames, framerate, storage_path):
+        super(DiskVideoChunk, self).__init__()
+        self.path = storage_path
+        self.fps = framerate
+        self.length = len(frames)
+        torch.save(frames, self.path)
+
+        # they'll be loaded on the fly later
+        self.frames = None
+
+    @load_wrap
+    def __getitem__(self, *args, **kwargs):
+        return self.frames.__getitem__(*args, **kwargs)
+
+    @load_wrap
+    def __iter__(self, *args, **kwargs):
+        return self.frames.__iter__(*args, **kwargs)
+
+    def __len__(self):
+        return self.length
+
+
 def make_split_datasets(directory, seq_len, framerate,
                         image_width=128, chunk_length=1000, train_frac=0.8):
     filenames = get_videos(directory)
@@ -80,7 +115,9 @@ def make_split_datasets(directory, seq_len, framerate,
             print(fname)
             v = Video(fname, [3, image_width, image_width])
             for i in range(0, len(v), chunk_length):
-                chunk = VideoChunk(v[i : i + chunk_length], framerate)
+                # chunk = VideoChunk(v[i : i + chunk_length], framerate)
+                chunk = DiskVideoChunk(v[i : i + chunk_length], framerate,
+                                       directory + '/_chunk_' + str(len(chunks)))
                 chunks.append(chunk)
 
     test_frac = 1 - train_frac
@@ -133,10 +170,15 @@ class VideoData(Dataset):
                 current_count += len(v) - end_padding
         start_frame = i - current_count
 
+        # pull out the entire subsequence we're going to be taking chunks from
+        # this prevents thrashing on the disk-backed DiskVideoChunk
+        skip_rate = math.ceil(v.fps / self.framerate)
+        video_subset = v[start_frame : start_frame + self. seq_len * skip_rate]
+
         seq = torch.Tensor(self.seq_len, *self.image_size)
         for t in range(self.seq_len):
-            skipped_t = t * math.ceil(v.fps / self.framerate)
-            frame = v[start_frame + skipped_t]
+            skipped_t = t * skip_rate
+            frame = video_subset[skipped_t]
             seq[t].copy_(frame)
         return seq
 
@@ -180,14 +222,31 @@ class ChunkData(VideoData):
 # data_path = '/misc/vlgscratch3/FergusGroup/wwhitney/soccer'
 # data_path = '/speedy/data/soccer'
 
-# data_path = '/misc/vlgscratch3/FergusGroup/wwhitney/basketball'
-# train_data, test_data = make_split_datasets(data_path, 5, framerate=15, chunk_length=50)
+data_path = '/misc/vlgscratch3/FergusGroup/wwhitney/basketball'
+train_data, test_data = make_split_datasets(data_path, 5, framerate=15, chunk_length=50)
+
+print("Number of training sequences (with overlap): " + str(len(train_data)))
+print("Number of testing sequences (with overlap): " + str(len(test_data)))
+
+save_dict = {
+        'train_data': train_data,
+        'test_data': test_data,
+    }
+torch.save(save_dict, data_path + '/dataset.t7')
+
+
+# data_path = '/Users/willw/Downloads/dummy_data'
+# # data_path = '/speedy/data/soccer'
 #
-# print("Number of training sequences (with overlap): " + str(len(train_data)))
-# print("Number of testing sequences (with overlap): " + str(len(test_data)))
+# # data_path = '/misc/vlgscratch3/FergusGroup/wwhitney/basketball'
+# train_data, test_data = make_split_datasets(data_path, 5, framerate=2, chunk_length=50)
 #
+# #
+# # print("Number of training sequences (with overlap): " + str(len(train_data)))
+# # print("Number of testing sequences (with overlap): " + str(len(test_data)))
+# #
 # save_dict = {
 #         'train_data': train_data,
 #         'test_data': test_data,
 #     }
-# torch.save(save_dict, data_path + '/derp.t7')
+# torch.save(save_dict, data_path + '/dataset.t7')
