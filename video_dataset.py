@@ -96,19 +96,6 @@ def make_split_datasets(directory, seq_len, framerate,
                         image_width=128, chunk_length=1000, train_frac=0.8):
     filenames = get_videos(directory)
 
-    # videos = []
-    # for fname in filenames:
-    #     if fps(fname) >= framerate:
-    #         print(fname)
-    #         v = Video(fname, [3, image_width, image_width])
-    #         videos.append(v)
-    #
-    # chunks = []
-    # for v in videos:
-    #     for i in range(0, len(v), chunk_length):
-    #         chunk = VideoChunk(v[i : i + chunk_length], framerate)
-    #         chunks.append(chunk)
-
     chunks = []
     for fname in filenames:
         if fps(fname) >= framerate:
@@ -118,6 +105,7 @@ def make_split_datasets(directory, seq_len, framerate,
                 # chunk = VideoChunk(v[i : i + chunk_length], fps(fname))
                 chunk = DiskVideoChunk(v[i : i + chunk_length], fps(fname),
                                        directory + '/_chunk_' + str(len(chunks)))
+                                    #    directory + '/_overhead_chunk_' + str(len(chunks)))
                 chunks.append(chunk)
 
     test_frac = 1 - train_frac
@@ -137,6 +125,21 @@ def make_split_datasets(directory, seq_len, framerate,
     train_dataset = ChunkData(train_chunks, seq_len, framerate, image_width)
     test_dataset = ChunkData(test_chunks, seq_len, framerate, image_width)
     return train_dataset, test_dataset
+
+def load_disk_backed_data(checkpoint_path):
+    data_checkpoint = torch.load(checkpoint_path)
+    train_data = data_checkpoint['train_data']
+    test_data = data_checkpoint['test_data']
+
+    # this path will initially include the disk it's on
+    # strip that folder name and use its current location instead
+    dataset_root = os.path.dirname(checkpoint_path)
+    for chunk in train_data.videos:
+        chunk.path = dataset_root + os.path.basename(chunk.path)
+    for chunk in test_data.videos:
+        chunk.path = dataset_root + os.path.basename(chunk.path)
+    return train_data, test_data
+
 
 class VideoData(Dataset):
     def __init__(self, directory, seq_len, framerate, image_width=128):
@@ -250,3 +253,16 @@ class ChunkData(VideoData):
 #         'test_data': test_data,
 #     }
 # torch.save(save_dict, data_path + '/dataset.t7')
+
+
+# data_path = '/Users/willw/Downloads/APIDIS_VIDEO'
+# train_data, test_data = make_split_datasets(data_path, 5, framerate=15, chunk_length=50)
+#
+# print("Number of training sequences (with overlap): " + str(len(train_data)))
+# print("Number of testing sequences (with overlap): " + str(len(test_data)))
+#
+# save_dict = {
+#         'train_data': train_data,
+#         'test_data': test_data,
+#     }
+# torch.save(save_dict, data_path + '/overhead.t7')

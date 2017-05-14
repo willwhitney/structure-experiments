@@ -92,13 +92,20 @@ if not opt.resume:
             data_path = '/misc/vlgscratch3/FergusGroup/wwhitney/' + opt.data
             # data_path = '/misc/vlgscratch3/FergusGroup/wwhitney/urban/5th_ave'
 
-        if not data_path[-3:] == '.t7':
-            data_path = data_path + '/dataset.t7'
+        # 'urban' datasets are in-memory stores
+        if data_path.find('urban'):
+            if not data_path[-3:] == '.t7':
+                data_path = data_path + '/dataset.t7'
 
-        print("Loading stored dataset from {}".format(data_path))
-        data_checkpoint = torch.load(data_path)
-        train_data = data_checkpoint['train_data']
-        test_data = data_checkpoint['test_data']
+            print("Loading stored dataset from {}".format(data_path))
+            data_checkpoint = torch.load(data_path)
+            train_data = data_checkpoint['train_data']
+            test_data = data_checkpoint['test_data']
+
+        # other video datasets are big and stored as chunks
+        else:
+            print("Loading stored dataset from {}".format(data_path))
+            train_data, test_data = load_disk_backed_data(data_path)
         # train_data, test_data = make_split_datasets(
         #     data_path, 5, framerate=2, image_width=opt.image_width)
 
