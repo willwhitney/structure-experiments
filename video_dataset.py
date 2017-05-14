@@ -115,8 +115,8 @@ def make_split_datasets(directory, seq_len, framerate,
             print(fname)
             v = Video(fname, [3, image_width, image_width])
             for i in range(0, len(v), chunk_length):
-                # chunk = VideoChunk(v[i : i + chunk_length], framerate)
-                chunk = DiskVideoChunk(v[i : i + chunk_length], framerate,
+                # chunk = VideoChunk(v[i : i + chunk_length], fps(fname))
+                chunk = DiskVideoChunk(v[i : i + chunk_length], fps(fname),
                                        directory + '/_chunk_' + str(len(chunks)))
                 chunks.append(chunk)
 
@@ -222,17 +222,17 @@ class ChunkData(VideoData):
 # data_path = '/misc/vlgscratch3/FergusGroup/wwhitney/soccer'
 # data_path = '/speedy/data/soccer'
 
-data_path = '/misc/vlgscratch3/FergusGroup/wwhitney/basketball'
-train_data, test_data = make_split_datasets(data_path, 5, framerate=15, chunk_length=50)
-
-print("Number of training sequences (with overlap): " + str(len(train_data)))
-print("Number of testing sequences (with overlap): " + str(len(test_data)))
-
-save_dict = {
-        'train_data': train_data,
-        'test_data': test_data,
-    }
-torch.save(save_dict, data_path + '/dataset.t7')
+# data_path = '/misc/vlgscratch3/FergusGroup/wwhitney/basketball'
+# train_data, test_data = make_split_datasets(data_path, 5, framerate=15, chunk_length=50)
+#
+# print("Number of training sequences (with overlap): " + str(len(train_data)))
+# print("Number of testing sequences (with overlap): " + str(len(test_data)))
+#
+# save_dict = {
+#         'train_data': train_data,
+#         'test_data': test_data,
+#     }
+# torch.save(save_dict, data_path + '/dataset.t7')
 
 
 # data_path = '/Users/willw/Downloads/dummy_data'
