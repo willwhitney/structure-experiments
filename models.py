@@ -217,7 +217,8 @@ class IndependentModel(nn.Module):
 
         seq_divergence = seq_divergence / len(sequence)
         seq_prior_div = seq_prior_div
-        seq_trans_div = seq_trans_div / (len(sequence) - 1)
+        if len(sequence) > 1:
+            seq_trans_div = seq_trans_div / (len(sequence) - 1)
         if len(sequence) > 1:
             z_var_mean = z_var_mean / (len(sequence) - 1)
         else:

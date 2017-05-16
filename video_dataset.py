@@ -135,9 +135,9 @@ def load_disk_backed_data(checkpoint_path):
     # strip that folder name and use its current location instead
     dataset_root = os.path.dirname(checkpoint_path)
     for chunk in train_data.videos:
-        chunk.path = dataset_root + os.path.basename(chunk.path)
+        chunk.path = dataset_root + '/' + os.path.basename(chunk.path)
     for chunk in test_data.videos:
-        chunk.path = dataset_root + os.path.basename(chunk.path)
+        chunk.path = dataset_root + '/' + os.path.basename(chunk.path)
     return train_data, test_data
 
 

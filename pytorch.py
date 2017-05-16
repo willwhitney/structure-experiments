@@ -81,9 +81,12 @@ logging.debug(("step,loss,nll,divergence,prior divergence,"
 
 # --------- load a dataset ------------------------------------
 if not opt.resume:
-    if opt.sanity:
-        train_data, test_data = make_split_datasets(
-            '.', 5, framerate=opt.fps, image_width=opt.image_width, chunk_length=50)
+    if False:
+        pass
+    # if opt.sanity:
+    #     train_data, test_data = make_split_datasets(
+    #         '.', opt.seq_len,
+    #         framerate=opt.fps, image_width=opt.image_width, chunk_length=50)
     else:
         if hostname == 'zaan':
             data_path = '/speedy/data/' + opt.data
@@ -93,7 +96,7 @@ if not opt.resume:
             # data_path = '/misc/vlgscratch3/FergusGroup/wwhitney/urban/5th_ave'
 
         # 'urban' datasets are in-memory stores
-        if data_path.find('urban'):
+        if data_path.find('urban') >= 0:
             if not data_path[-3:] == '.t7':
                 data_path = data_path + '/dataset.t7'
 
@@ -102,10 +105,37 @@ if not opt.resume:
             train_data = data_checkpoint['train_data']
             test_data = data_checkpoint['test_data']
 
+            train_data.seq_len = opt.seq_len
+            test_data.seq_len = opt.seq_len
+
+            load_workers = 0
+
         # other video datasets are big and stored as chunks
         else:
+            if hostname != 'zaan':
+                scratch_path = '/scratch/wwhitney/' + opt.data
+                vlg_path = '/misc/vlgscratch4/FergusGroup/wwhitney/' + opt.data
+
+                data_path = vlg_path
+                # if os.path.exists(scratch_path):
+                #     data_path = scratch_path
+                # else:
+                #     data_path = vlg_path
+
             print("Loading stored dataset from {}".format(data_path))
             train_data, test_data = load_disk_backed_data(data_path)
+
+            if opt.data_sparsity > 1:
+                train_data.videos = [train_data.videos[i]
+                                     for i in range(len(train_data.videos))
+                                     if i % opt.data_sparsity == 0]
+            load_workers = 4
+
+            train_data.framerate = opt.fps
+            test_data.framerate = opt.fps
+
+            train_data.seq_len = opt.seq_len
+            test_data.seq_len = opt.seq_len
         # train_data, test_data = make_split_datasets(
         #     data_path, 5, framerate=2, image_width=opt.image_width)
 
@@ -116,11 +146,11 @@ if not opt.resume:
 # torch.save(save_dict, opt.save + '/dataset.t7')
 
 train_loader = DataLoader(train_data,
-                          num_workers=0,
+                          num_workers=load_workers,
                           batch_size=batch_size,
                           shuffle=True)
 test_loader = DataLoader(test_data,
-                         num_workers=0,
+                         num_workers=load_workers,
                          batch_size=batch_size,
                          shuffle=True)
                         #   drop_last=True)
@@ -177,13 +207,16 @@ else:
     n_steps = int(5e8)
     k = 200000
 
-cov_start = time.time()
-construct_covariance(opt.save, model, train_loader, 2000,
-                     label="train_" + str(i))
-construct_covariance(opt.save, model, test_loader, 2000,
-                     label="test_" + str(i))
-cov_end = time.time()
-print("Covariance analysis done. Duration: {:.2f}".format(cov_end - cov_start))
+if opt.seq_len > 1:
+    pass
+    # print("Running covariance analysis...")
+    # cov_start = time.time()
+    # construct_covariance(opt.save, model, train_loader, 2000,
+    #                      label="train_" + str(i))
+    # construct_covariance(opt.save, model, test_loader, 2000,
+    #                      label="test_" + str(i))
+    # cov_end = time.time()
+    # print("Covariance analysis done. Duration: {:.2f}".format(cov_end - cov_start))
 
 # make k a multiple of batch_size
 k = (k // batch_size) * batch_size
@@ -282,12 +315,13 @@ while i < n_steps:
                 }
             torch.save(save_dict, opt.save + '/model.t7')
 
-        # do this at the beginning, and periodically after
-        if i == n_steps or (i % 500000 == 0 and i > 0):
-            construct_covariance(opt.save, model, train_loader, 2000,
-                                 label="train_" + str(i))
-            construct_covariance(opt.save, model, test_loader, 2000,
-                                 label="test_" + str(i))
+        if opt.seq_len > 1:
+            # do this at the beginning, and periodically after
+            if i == n_steps or (i % 500000 == 0 and i > 0):
+                construct_covariance(opt.save, model, train_loader, 2000,
+                                     label="train_" + str(i))
+                construct_covariance(opt.save, model, test_loader, 2000,
+                                     label="test_" + str(i))
 
         # learning rate decay
         # 0.985 every 320K -> ~0.2 at 1,000,000 steps

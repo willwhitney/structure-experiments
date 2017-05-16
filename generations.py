@@ -11,14 +11,17 @@ def save_all_generations(model, sequence, generations):
     priming = sequence[:2]
 
     save_posterior(model, sequence, generations)
-    save_generations(model, priming)
-    save_ml(model, priming)
     save_z1_samples(model)
-    save_independent_ml(model, priming)
-    save_independent_gen(model, priming)
-    save_independent_resample(model, priming)
     save_interpolation(model, priming)
-    save_single_replacement(model, sequence)
+
+    # these depend on priming the model first, then predicting in some way
+    if opt.seq_len > 1:
+        save_generations(model, priming)
+        save_ml(model, priming)
+        save_independent_ml(model, priming)
+        save_independent_gen(model, priming)
+        save_independent_resample(model, priming)
+        save_single_replacement(model, sequence)
 
 def save_posterior(model, sequence, generations):
     # save some results from the latest batch
