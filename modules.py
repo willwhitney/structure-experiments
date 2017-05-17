@@ -863,3 +863,23 @@ class GaussianLL(nn.Module):
         c = mu.size(1) * math.log(2*math.pi)
         log_likelihoods = -0.5 * (a + b + c)
         return log_likelihoods.mean()
+
+class MotionGaussianLL(nn.Module):
+    def forward(self, p, target, mask):
+        # print(p[0].size())
+        # print(target.size())
+        (mu, sigma) = p
+        mu = batch_flatten(mu)
+        sigma = batch_flatten(sigma)
+        target = batch_flatten(target)
+        # show(mask[0].data.cpu() / 4)
+        mask = batch_flatten(mask)
+        #
+        # sigma = Variable(torch.ones(sigma.size()).type_as(sigma.data) / 10)
+        #
+        a = torch.sum(torch.log(sigma), 1)
+        diff = (target - mu) * mask
+        b = torch.sum(torch.pow(diff, 2) / sigma, 1)
+        c = mu.size(1) * math.log(2*math.pi)
+        log_likelihoods = -0.5 * (a + b + c)
+        return log_likelihoods.mean()

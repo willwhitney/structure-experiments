@@ -235,7 +235,9 @@ while i < n_steps:
         # if not opt.no_kl_annealing:
         #     kl_scale = max(0, min(i / opt.kl_anneal_end, 1))
 
-        generations, nll, divergences = model(sequence, kl_scale=kl_scale)
+        generations, nll, divergences = model(sequence,
+                                              kl_scale=kl_scale,
+                                              motion_weight=opt.motion_weight)
         (seq_divergence, seq_prior_div, seq_trans_div) = divergences
         mean_divergence += seq_divergence.data[0]
         mean_prior_div += seq_prior_div.data[0]

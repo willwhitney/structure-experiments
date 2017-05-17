@@ -8,7 +8,8 @@ from modules import *
 from params import *
 
 KL = GaussianKLD().type(dtype)
-LL = GaussianLL().type(dtype)
+# LL = GaussianLL().type(dtype)
+LL = MotionGaussianLL().type(dtype)
 mse = nn.MSELoss().type(dtype)
 
 class VAEModel(nn.Module):
@@ -107,6 +108,22 @@ class VAEModel(nn.Module):
             generations.append(self.generator(latent)[0])
         return generations
 
+def motion_diffs(sequence):
+    if len(sequence) == 1:
+        return Variable(torch.zeros(sequence[0].size()))
+    forward_diffs = []
+    for t in range(len(sequence) - 1):
+        diff = torch.gt(torch.abs(sequence[t] - sequence[t+1]), 0.05)
+        forward_diffs.append(diff)
+
+    bidirectional_diffs = [forward_diffs[0]]
+    for t in range(1, len(sequence) - 1):
+        sum_diff = torch.max(forward_diffs[t-1], forward_diffs[t])
+        bidirectional_diffs.append(sum_diff)
+    bidirectional_diffs.append(forward_diffs[-1])
+    float_diffs = [diff.float() for diff in bidirectional_diffs]
+    return float_diffs
+
 class IndependentModel(nn.Module):
     def __init__(self, n_latents, hidden_dim, img_size,
                  transition=Transition, first_inference=DCGANFirstInference,
@@ -153,7 +170,7 @@ class IndependentModel(nn.Module):
                      torch.cat([prior[1] for prior in z_prior], 1))
         return cat_prior
 
-    def forward(self, sequence, kl_scale=1):
+    def forward(self, sequence, kl_scale=1, motion_weight=0):
         # loss = Variable(torch.zeros(1).type(dtype))
         seq_divergence = Variable(torch.zeros(1).type(dtype))
         seq_prior_div = Variable(torch.zeros(1).type(dtype))
@@ -179,6 +196,9 @@ class IndependentModel(nn.Module):
         z_var_min = 1e6
         z_var_max = -1
 
+        diffs = motion_diffs(sequence)
+        pixel_weights = [diff * motion_weight + 1 for diff in diffs]
+
         for t in range(len(sequence)):
             inferred_z_post[0].register_hook(lambda grad: grad * kl_scale)
             inferred_z_post[1].register_hook(lambda grad: grad * kl_scale)
@@ -197,7 +217,9 @@ class IndependentModel(nn.Module):
 
             gen_dist = self.generator(z_sample)
             # import ipdb; ipdb.set_trace()
-            log_likelihood = LL(gen_dist, reshaped_sequence[t])
+            log_likelihood = LL(gen_dist,
+                                reshaped_sequence[t],
+                                pixel_weights[t])
             seq_nll = seq_nll - log_likelihood
 
             generations.append(gen_dist)

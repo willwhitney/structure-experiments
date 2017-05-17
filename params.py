@@ -29,6 +29,7 @@ parser.add_argument('--batch_size', default=100, type=int)
 parser.add_argument('--fps', default=4, type=int)
 parser.add_argument('--seq_len', default=5, type=int)
 parser.add_argument('--data_sparsity', default=1, type=int)
+parser.add_argument('--motion_weight', default=0, type=int)
 
 parser.add_argument('--lr', default=3e-4, type=float)
 parser.add_argument('--no_lr_decay', action="store_true")
