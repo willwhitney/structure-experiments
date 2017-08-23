@@ -28,12 +28,14 @@ def get_videos(directory):
             filenames.append(directory)
             break
         else:
-            form_filenames = glob.glob("{}/*.{}".format(directory, form))
+            # form_filenames = glob.glob("{}/*.{}".format(directory, form))
+            # filenames.extend(form_filenames)
+            form_filenames = glob.glob("{}/camera2*.{}".format(directory, form))
             filenames.extend(form_filenames)
-            # form_filenames = glob.glob("{}/camera3*.{}".format(directory, form))
-            # filenames.extend(form_filenames)
-            # form_filenames = glob.glob("{}/camera5*.{}".format(directory, form))
-            # filenames.extend(form_filenames)
+            form_filenames = glob.glob("{}/camera4*.{}".format(directory, form))
+            filenames.extend(form_filenames)
+            form_filenames = glob.glob("{}/camera7*.{}".format(directory, form))
+            filenames.extend(form_filenames)
     return filenames
 
 class Video(list):
@@ -70,9 +72,10 @@ def load_wrap(f):
     return wrapper
 
 class DiskVideoChunk():
-    def __init__(self, frames, framerate, storage_path):
+    def __init__(self, frames, framerate, storage_path, source_path):
         super(DiskVideoChunk, self).__init__()
         self.path = storage_path
+        self.source_path = source_path
         self.fps = framerate
         self.length = len(frames)
         torch.save(frames, self.path)
@@ -103,8 +106,10 @@ def make_split_datasets(directory, seq_len, framerate,
             v = Video(fname, [3, image_width, image_width])
             for i in range(0, len(v), chunk_length):
                 # chunk = VideoChunk(v[i : i + chunk_length], fps(fname))
-                chunk = DiskVideoChunk(v[i : i + chunk_length], fps(fname),
-                                       directory + '/_chunk_' + str(len(chunks)))
+                chunk = DiskVideoChunk(v[i : i + chunk_length],
+                                       fps(fname),
+                                       directory + '/_closeup_chunk_' + str(len(chunks)),
+                                       fname)
                                     #    directory + '/_overhead_chunk_' + str(len(chunks)))
                 chunks.append(chunk)
 
@@ -265,4 +270,4 @@ class ChunkData(VideoData):
 #         'train_data': train_data,
 #         'test_data': test_data,
 #     }
-# torch.save(save_dict, data_path + '/overhead.t7')
+# torch.save(save_dict, data_path + '/closeup.t7')
