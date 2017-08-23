@@ -8,7 +8,6 @@ import matplotlib.pyplot as plt
 import imageio
 import sys
 import shutil
-import git
 
 def is_sequence(arg):
     return (not hasattr(arg, "strip") and
@@ -290,7 +289,7 @@ def atomic_save(obj, path):
     tmp_path = path + '.tmp'
     torch.save(obj, tmp_path)
     shutil.move(tmp_path, path)
-
+    
 def make_pointer_commit(name, message='', commit_if_dirty=True):
     """
     Saves the exact working state at the time of the experiment

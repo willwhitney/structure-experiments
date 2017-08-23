@@ -13,8 +13,8 @@ hostname = socket.gethostname()
 # else:
 #     dtype = torch.FloatTensor
 
-dtype = torch.FloatTensor
-# dtype = torch.cuda.FloatTensor
+dtype = torch.cuda.FloatTensor
+# batch_size = 64
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--name', default=get_gpu())
@@ -35,8 +35,6 @@ parser.set_defaults(kl_anneal=True)
 parser.add_argument('--load', default=None)
 parser.add_argument('--use-loaded-opt', action="store_true")
 parser.add_argument('--resume', action="store_true")
-
-parser.add_argument('--tiny', action="store_true")
 
 parser.add_argument('--data', default='urban/5th_ave')
 parser.add_argument('--batch-size', default=100, type=int)
