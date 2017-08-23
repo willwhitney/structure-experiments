@@ -19,8 +19,8 @@ class VAEModel(nn.Module):
         self.img_size = img_size
 
         self.z1_prior = (
-            Variable(torch.zeros(batch_size, self.hidden_dim).type(dtype)),
-            Variable(torch.ones(batch_size, self.hidden_dim).type(dtype))
+            Variable(torch.zeros(opt.batch_size, self.hidden_dim).type(dtype)),
+            Variable(torch.ones(opt.batch_size, self.hidden_dim).type(dtype))
         )
 
         image_dim = [3, self.img_size, self.img_size]
@@ -37,7 +37,7 @@ class VAEModel(nn.Module):
         loss = Variable(torch.zeros(1).type(dtype))
         seq_divergence = Variable(torch.zeros(1).type(dtype),
                                   requires_grad=False)
-        batch_size = sequence[0].size(0)
+        # batch_size = sequence[0].size(0)
         generations = []
 
         reshaped_sequence = sequence
@@ -134,8 +134,8 @@ class IndependentModel(nn.Module):
         self.hidden_dim = hidden_dim
 
         single_z1 = (
-            Variable(torch.zeros(batch_size, self.hidden_dim).type(dtype)),
-            Variable(torch.ones(batch_size, self.hidden_dim).type(dtype))
+            Variable(torch.zeros(opt.batch_size, self.hidden_dim).type(dtype)),
+            Variable(torch.ones(opt.batch_size, self.hidden_dim).type(dtype))
         )
         self.z1_prior = (torch.cat([single_z1[0] for _ in range(n_latents)], 1),
                          torch.cat([single_z1[1] for _ in range(n_latents)], 1))
@@ -178,7 +178,7 @@ class IndependentModel(nn.Module):
 
         seq_nll = Variable(torch.zeros(1).type(dtype))
 
-        batch_size = sequence[0].size(0)
+        # batch_size = sequence[0].size(0)
         generations = []
 
         reshaped_sequence = sequence
@@ -440,7 +440,7 @@ class MSEModel(nn.Module):
         loss = Variable(torch.zeros(1).type(dtype))
         seq_divergence = Variable(torch.zeros(1).type(dtype),
                                   requires_grad=False)
-        batch_size = sequence[0].size(0)
+        # batch_size = sequence[0].size(0)
         generations = [(sequence[0], None)]
 
         reshaped_sequence = sequence

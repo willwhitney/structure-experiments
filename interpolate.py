@@ -30,11 +30,11 @@ test_data = data_checkpoint['test_data']
 
 train_loader = DataLoader(train_data,
                           num_workers=0,
-                          batch_size=batch_size,
+                          batch_size=opt.batch_size,
                           shuffle=True)
 test_loader = DataLoader(test_data,
                          num_workers=0,
-                         batch_size=batch_size,
+                         batch_size=opt.batch_size,
                          shuffle=True)
 
 def sequence_input(seq):

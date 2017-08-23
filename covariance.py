@@ -154,11 +154,11 @@ if __name__ == "__main__":
     # dataset = VideoData('/speedy/data/urban/tuesday_4fps.MP4', 5, framerate=2)
     train_loader = DataLoader(train_data,
                         num_workers=0,
-                        batch_size=batch_size,
+                        batch_size=opt.batch_size,
                         shuffle=True)
     test_loader = DataLoader(test_data,
                         num_workers=0,
-                        batch_size=batch_size,
+                        batch_size=opt.batch_size,
                         shuffle=True)
 
     checkpoint = torch.load('results/' + opt.load + '/model.t7')

@@ -48,7 +48,6 @@ if opt.load is not None:
         setattrs(opt, cp_opt, exceptions=[
             'name', 'load', 'sanity', 'resume', 'use_loaded_opt'
         ])
-    batch_size = opt.batch_size
 else:
     i = 0
     model = IndependentModel(opt.latents,
@@ -77,11 +76,11 @@ train_data = AtariData(opt.game, 'train', 5, opt.image_width)
 test_data = AtariData(opt.game, 'test', 5, opt.image_width)
 train_loader = DataLoader(train_data,
                           num_workers=0,
-                          batch_size=batch_size,
+                          batch_size=opt.batch_size,
                           shuffle=True)
 test_loader = DataLoader(test_data,
                          num_workers=0,
-                         batch_size=batch_size,
+                         batch_size=opt.batch_size,
                          shuffle=True)
                         #   drop_last=True)
 print("Number of training sequences: " + str(len(train_data)))
@@ -96,18 +95,18 @@ mse = nn.MSELoss().type(dtype)
 l1 = nn.L1Loss().type(dtype)
 
 def make_real_seq(length):
-    sequence = [torch.zeros(batch_size, opt.image_width**2 * 3)
+    sequence = [torch.zeros(opt.batch_size, opt.image_width**2 * 3)
                 for _ in range(length)]
-    for batch in range(batch_size):
+    for batch in range(opt.batch_size):
         sequence[0][batch] = gen.start().render().view(opt.image_width**2 * 3)
         for i in range(1, length):
             sequence[i][batch] = gen.step().render().view(opt.image_width**2 * 3)
     return [Variable(x.type(dtype)) for x in sequence]
 
 def make_seq(length, dim):
-    sequence = [torch.zeros(batch_size, dim).normal_(0.5, 0.1)]
+    sequence = [torch.zeros(opt.batch_size, dim).normal_(0.5, 0.1)]
     for i in range(1, length):
-        noise = torch.zeros(batch_size, dim) # torch.normal([0.0, 0.0], [0.1, 0.1])
+        noise = torch.zeros(opt.batch_size, dim) # torch.normal([0.0, 0.0], [0.1, 0.1])
         sequence.append(sequence[i-1] + noise)
     sequence = [Variable(x.type(dtype)) for x in sequence]
     return sequence
@@ -133,8 +132,8 @@ z_var_max = -1
 
 sequence = None
 if opt.sanity:
-    n_steps = 10 * batch_size
-    k = 10 * batch_size
+    n_steps = 10 * opt.batch_size
+    k = 10 * opt.batch_size
 else:
     n_steps = int(5e8)
     k = 100000
@@ -148,14 +147,14 @@ cov_end = time.time()
 print("Covariance analysis done. Duration: {:.2f}".format(cov_end - cov_start))
 
 # make k a multiple of batch_size
-k = (k // batch_size) * batch_size
+k = (k // opt.batch_size) * opt.batch_size
 progress = progressbar.ProgressBar(max_value=k)
 while i < n_steps:
     for sequence in train_loader:
         # deal with the last, missized batch until drop_last gets shipped
-        if sequence.size(0) != batch_size:
+        if sequence.size(0) != opt.batch_size:
             continue
-        i += batch_size
+        i += opt.batch_size
 
         sequence.transpose_(0, 1)
         sequence = sequence_input(list(sequence))
@@ -204,7 +203,7 @@ while i < n_steps:
             elapsed_time = progress.end_time - progress.start_time
             elapsed_seconds = elapsed_time.total_seconds()
 
-            batches = k / batch_size
+            batches = k / opt.batch_size
             log_values = (i,
                           mean_loss / batches,
                           mean_nll / batches,

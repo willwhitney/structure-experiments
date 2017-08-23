@@ -289,3 +289,64 @@ def atomic_save(obj, path):
     tmp_path = path + '.tmp'
     torch.save(obj, tmp_path)
     shutil.move(tmp_path, path)
+    
+def make_pointer_commit(name, message='', commit_if_dirty=True):
+    """
+    Saves the exact working state at the time of the experiment
+    and tags it with the experiment's name.
+
+    If the repo has uncommitted changes and commit_if_dirty,
+        make a new commit.
+    Create a tag pointing at the current head.
+    If we created a commit, make a revert commit.
+    """
+    repo = git.Repo('.')
+    starting_commit = repo.head.commit.hexsha
+
+    needs_commit = repo.is_dirty() and commit_if_dirty
+    if needs_commit:
+        try:
+            repo.git.add(A=True)
+            repo.git.commit(m="Experiment: {}".format(name))
+        except:
+            repo.git.reset(starting_commit)
+            raise
+
+    tagname = "Exp_{}".format(name)
+    commit_with_changes = repo.head.commit.hexsha
+    try:
+        repo.create_tag(tagname, ref=repo.head.commit,
+            message=message)
+    except:
+        # tag already exists
+        delete_existing = query_yes_no((
+            "Tag {} already exists. "
+            "Delete it locally and continue?").format(tagname))
+        if delete_existing:
+            repo.git.tag(tagname, delete=True)
+            repo.create_tag(tagname, ref=repo.head.commit,
+                message=message)
+        else:
+            print("Not deleting the tag.\n"
+                  "Resetting the repo and quitting instead.")
+            exit()
+        # repo.git.push('origin', tagname, delete=True)
+
+    if needs_commit:
+        try:
+            repo.git.revert('HEAD', no_edit=True)
+            revert_commit = repo.head.commit.hexsha
+            repo.git.reset(commit_with_changes, hard=True)
+            repo.git.reset(revert_commit)
+        except:
+            repo.git.reset(commit_with_changes)
+            raise
+
+    return commit_with_changes
+
+def get_commit_hash():
+    repo = git.Repo('.')
+    return repo.head.commit.hexsha
+
+def sequence_input(seq):
+    return [Variable(x.type(dtype)) for x in seq]
