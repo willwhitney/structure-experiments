@@ -34,9 +34,18 @@ if opt.load is not None:
     i, model = load_checkpoint()
 else:
     i = 0
-    model = IndependentModel(opt.latents,
-                             opt.latent_dim,
-                             opt.image_width).type(dtype)
+    if opt.tiny:
+        model = IndependentModel(opt.latents,
+                                 opt.latent_dim,
+                                 opt.image_width,
+                                 transition=Transition,
+                                 first_inference=TinyDCGANFirstInference,
+                                 inference=TinyDCGANInference,
+                                 generator=TinyDCGANGenerator).type(dtype)
+    else:
+        model = IndependentModel(opt.latents,
+                                 opt.latent_dim,
+                                 opt.image_width).type(dtype)
 
 opt.save = 'results/' + opt.name
 print(model)
