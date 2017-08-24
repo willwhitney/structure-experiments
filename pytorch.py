@@ -30,6 +30,7 @@ from modules import *
 from models import *
 from env import *
 from params import *
+from setup import *
 from generations import *
 from atari_dataset import AtariData
 from video_dataset import *
@@ -42,7 +43,7 @@ random.seed(opt.seed)
 
 # ------- load the model first, as this affects the paths used --------
 if opt.load is not None:
-    i, model = load_checkpoint()
+    i, model = load_checkpoint(opt)
 else:
     i = 0
     if opt.tiny:
@@ -71,8 +72,8 @@ if opt.git:
 else:
     opt.git_hash = get_commit_hash()
 
-make_result_folder(opt.save)
-write_options(opt.save)
+make_result_folder(opt, opt.save)
+write_options(opt, opt.save)
 
 logging.basicConfig(filename = opt.save + "/results.csv",
                     level = logging.DEBUG,
@@ -81,7 +82,7 @@ logging.debug(("step,loss,nll,divergence,prior divergence,"
                "trans divergence,grad norm,ms/seq,lr"))
 
 # --------- load a dataset ------------------------------------
-train_data, test_data, load_workers = load_dataset()
+train_data, test_data, load_workers = load_dataset(opt)
 
 train_loader = DataLoader(train_data,
                           num_workers=load_workers,
