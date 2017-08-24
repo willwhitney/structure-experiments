@@ -117,9 +117,9 @@ model = VAE()
 if args.cuda:
     model.cuda()
 
+gaussianKL = GaussianKLD()
 reconstruction_function = nn.BCELoss()
 reconstruction_function.size_average = False
-
 
 def loss_function(recon_x, x, mu, logvar):
     BCE = reconstruction_function(recon_x, x)
@@ -133,7 +133,8 @@ def loss_function(recon_x, x, mu, logvar):
 
     return BCE + KLD, KLD, BCE
 
-def gaussian_loss_function(recon_x, x, mu, logvar):
+# def gaussian_loss_function(recon_x, x, mu, logvar):
+#     output_KLD = gaussianKL(recon_x, )
 
 
 
