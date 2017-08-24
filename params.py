@@ -39,7 +39,9 @@ parser.add_argument('--load', default=None)
 parser.add_argument('--use-loaded-opt', action="store_true")
 parser.add_argument('--resume', action="store_true")
 
-parser.add_argument('--tiny', action="store_true")
+parser.add_argument('--print-every', default=200000, type=int)
+parser.add_argument('--max-steps', default=5e8, type=int)
+parser.add_argument('--seed', default=0, type=int)
 
 parser.add_argument('--data', default='urban/5th_ave')
 parser.add_argument('--batch-size', default=100, type=int)
@@ -58,6 +60,7 @@ parser.add_argument('--output-var', default=0.01, type=float)
 parser.add_argument('--latents', default=3, type=int)
 parser.add_argument('--latent-dim', default=25, type=int)
 parser.add_argument('--trans-layers', default=4, type=int)
+parser.add_argument('--tiny', action="store_true")
 
 parser.add_argument('--game', default='freeway')
 
@@ -152,22 +155,24 @@ def load_dataset():
             load_workers = 0
 
         elif opt.data == 'atari':
-            train_data = AtariData(opt.game, 'train', 5, opt.image_width)
-            test_data = AtariData(opt.game, 'test', 5, opt.image_width)
+            train_data = AtariData(
+                opt.game, 'train', opt.seq_len, opt.image_width)
+            test_data = AtariData(
+                opt.game, 'test', opt.seq_len, opt.image_width)
             load_workers = 0
 
         elif opt.data == 'balls':
             train_data = BounceData(
-                5, opt.balls, opt.colors, opt.image_width)
+                opt.seq_len, opt.balls, opt.colors, opt.image_width)
             test_data = BounceData(
-                5, opt.balls, opt.colors, opt.image_width)
+                opt.seq_len, opt.balls, opt.colors, opt.image_width)
             load_workers = 0
 
         elif opt.data == '1d_balls':
             train_data = HorizontalBounceData(
-                5, opt.balls, opt.colors, opt.image_width)
+                opt.seq_len, opt.balls, opt.colors, opt.image_width)
             test_data = HorizontalBounceData(
-                5, opt.balls, opt.colors, opt.image_width)
+                opt.seq_len, opt.balls, opt.colors, opt.image_width)
             load_workers = 0
 
         # other video datasets are big and stored as chunks

@@ -9,6 +9,7 @@ import imageio
 import sys
 import shutil
 import git
+from torch.autograd import Variable
 
 def is_sequence(arg):
     return (not hasattr(arg, "strip") and
@@ -349,5 +350,5 @@ def get_commit_hash():
     repo = git.Repo('.')
     return repo.head.commit.hexsha
 
-def sequence_input(seq):
+def sequence_input(seq, dtype):
     return [Variable(x.type(dtype)) for x in seq]

@@ -196,8 +196,12 @@ class IndependentModel(nn.Module):
         z_var_min = 1e6
         z_var_max = -1
 
-        diffs = motion_diffs(sequence)
-        pixel_weights = [diff * motion_weight + 1 for diff in diffs]
+        if len(sequence) > 1:
+            diffs = motion_diffs(sequence)
+            pixel_weights = [diff * motion_weight + 1 for diff in diffs]
+        else:
+            ones = Variable(torch.ones(sequence[0].size()).type(dtype))
+            pixel_weights = [ones]
 
         for t in range(len(sequence)):
             inferred_z_post[0].register_hook(lambda grad: grad * kl_scale)

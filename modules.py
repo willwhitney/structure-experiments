@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 
 import math
+import pdb
 
 from util import *
 from params import *
@@ -51,6 +52,8 @@ if opt.activation == 'lrelu':
     activation = F.leaky_relu
 elif opt.activation == 'tanh':
     activation = F.tanh
+elif opt.activation == 'selu':
+    activation = F.selu
 else:
     raise Exception("Activation was not specified properly.")
 
@@ -604,11 +607,6 @@ class DCGANFirstInference(nn.Module):
         sigma = F.sigmoid(self.lin_sigma(new_hidden)) + eps
         return (mu, sigma)
 
-
-class TinyTransition(Transition):
-    def __init__(self, hidden_dim, layers=2):
-        super(TinyTransition, self).__init__(hidden_dim, layers)
-
 class TinyDCGANFirstInference(nn.Module):
     def __init__(self, input_dims, hidden_dim):
         super(TinyDCGANFirstInference, self).__init__()
@@ -638,6 +636,7 @@ class TinyDCGANFirstInference(nn.Module):
                                                padding=self.pads[l],
                                                stride=self.strides[l])))
         self.convs = nn.ModuleList()
+        self.bns = nn.ModuleList()
         for l in range(len(self.planes)):
             in_planes, in_height, in_width = self.out_dims[l]
             self.convs.append(nn.Conv2d(in_planes,
@@ -645,6 +644,8 @@ class TinyDCGANFirstInference(nn.Module):
                                         self.kernels[l],
                                         padding=self.pads[l],
                                         stride=self.strides[l]))
+            if l < len(self.planes) - 1:
+                self.bns.append(nn.BatchNorm2d(int(self.planes[l])))
 
         print(self.out_dims)
         # self.conv1 = nn.Conv2d(input_dims[0], 32, 3)
@@ -659,12 +660,14 @@ class TinyDCGANFirstInference(nn.Module):
 
     def forward(self, x_t):
         current = x_t
-        for conv in self.convs:
+        for i, conv in enumerate(self.convs):
             current = conv(current)
-            current = F.leaky_relu(current)
+            if i < len(self.convs) - 1:
+                current = self.bns[i](current)
+            current = activation(current)
         current = current.resize(current.size(0), prod(self.out_dims[-1]))
         current = self.input_lin(current)
-        new_hidden = F.leaky_relu(current)
+        new_hidden = activation(current)
 
         # joined = torch.cat([current, z_prev], 1)
         # new_hidden = F.tanh(self.joint_lin(joined))
@@ -730,13 +733,13 @@ class TinyDCGANInference(nn.Module):
         current = x_t
         for conv in self.convs:
             current = conv(current)
-            current = F.leaky_relu(current)
+            current = activation(current)
         current = current.resize(current.size(0), prod(self.out_dims[-1]))
         current = self.input_lin(current)
-        current = F.leaky_relu(current)
+        current = activation(current)
 
         joined = torch.cat([current, z_prev], 1)
-        new_hidden = F.leaky_relu(self.joint_lin(joined))
+        new_hidden = activation(self.joint_lin(joined))
 
         # mu = 10 * F.tanh(self.lin_mu(new_hidden) / 10)
         mu = self.lin_mu(new_hidden)
@@ -784,10 +787,10 @@ class TinyDCGANGenerator(nn.Module):
             nn.Linear(hidden_dim, self.planes[0] * prod(self.in_dims[0]))])
         # import pdb; pdb.set_trace()
 
-        print("Generator: ", self.in_dims)
-        self.convs = nn.ModuleList()
+        # print("Generator: ", self.in_dims)
 
-        # print(self.in_dims)
+        self.convs = nn.ModuleList()
+        self.bns = nn.ModuleList()
         for l in range(1, len(self.planes)):
             in_height, in_width = self.in_dims[l]
             self.convs.append(nn.ConvTranspose2d(self.planes[l-1],
@@ -795,6 +798,9 @@ class TinyDCGANGenerator(nn.Module):
                                         self.kernels[l],
                                         stride=self.strides[l],
                                         padding=self.pads[l]))
+            if l < len(self.planes) - 1:
+                # pdb.set_trace()
+                self.bns.append(nn.BatchNorm2d(self.planes[l]))
 
         self.convs[-1].bias.data.add_(0.5)
 
@@ -802,17 +808,20 @@ class TinyDCGANGenerator(nn.Module):
         current = input
         for lin in self.lins:
             current = lin(current)
-            current = F.relu(current)
+            current = activation(current)
 
         current = current.resize(current.size(0),
                                  self.planes[0],
                                  *self.in_dims[0])
-        for conv in self.convs:
-            current = F.relu(current)
+        for i, conv in enumerate(self.convs):
+            current = activation(current)
+
             # current = self.upsample(current)
             current = conv(current)
+            if i < len(self.convs) - 1:
+                current = self.bns[i](current)
 
-        mu = F.leaky_relu(current[:, : int(current.size(1) / 2)])
+        mu = activation(current[:, : int(current.size(1) / 2)])
         sigma = Variable(torch.ones(mu.size()).type(dtype) * opt.output_var)
         return (mu, sigma)
 
@@ -826,11 +835,15 @@ class GaussianKLD(nn.Module):
         mu_p = batch_flatten(mu_p)
         sigma_p = batch_flatten(sigma_p)
 
-        a = torch.sum(torch.log(sigma_p), 1) - torch.sum(torch.log(sigma_q), 1)
-        b = torch.sum(sigma_q / sigma_p, 1)
+        log_sigma_p = torch.log(sigma_p)
+        log_sigma_q = torch.log(sigma_q)
+        sum_log_sigma_p = torch.sum(log_sigma_p, 1, keepdim=True)
+        sum_log_sigma_q = torch.sum(log_sigma_q, 1, keepdim=True)
+        a = sum_log_sigma_p - sum_log_sigma_q
+        b = torch.sum(sigma_q / sigma_p, 1, keepdim=True)
 
         mu_diff = mu_p - mu_q
-        c = torch.sum(torch.pow(mu_diff, 2) / sigma_p, 1)
+        c = torch.sum(torch.pow(mu_diff, 2) / sigma_p, 1, keepdim=True)
 
         D = mu_q.size(1)
         divergences = torch.mul(a + b + c - D, 0.5)
@@ -857,9 +870,9 @@ class GaussianLL(nn.Module):
 
         # sigma = Variable(torch.ones(sigma.size()).type_as(sigma.data) / 10)
 
-        a = torch.sum(torch.log(sigma), 1)
+        a = torch.sum(torch.log(sigma), 1, keepdim=True)
         diff = (target - mu)
-        b = torch.sum(torch.pow(diff, 2) / sigma, 1)
+        b = torch.sum(torch.pow(diff, 2) / sigma, 1, keepdim=True)
         c = mu.size(1) * math.log(2*math.pi)
         log_likelihoods = -0.5 * (a + b + c)
         return log_likelihoods.mean()
@@ -877,9 +890,9 @@ class MotionGaussianLL(nn.Module):
         #
         # sigma = Variable(torch.ones(sigma.size()).type_as(sigma.data) / 10)
         #
-        a = torch.sum(torch.log(sigma), 1)
+        a = torch.sum(torch.log(sigma), 1, keepdim=True)
         diff = (target - mu) * mask
-        b = torch.sum(torch.pow(diff, 2) / sigma, 1)
+        b = torch.sum(torch.pow(diff, 2) / sigma, 1, keepdim=True)
         c = mu.size(1) * math.log(2*math.pi)
         log_likelihoods = -0.5 * (a + b + c)
         return log_likelihoods.mean()

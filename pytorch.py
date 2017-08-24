@@ -1,3 +1,11 @@
+# import sys, warnings, traceback, torch
+# def warn_with_traceback(message, category, filename, lineno, file=None, line=None):
+#     sys.stderr.write(warnings.formatwarning(message, category, filename, lineno, line))
+#     traceback.print_stack(sys._getframe(2))
+# warnings.showwarning = warn_with_traceback; warnings.simplefilter('always', UserWarning);
+# torch.utils.backcompat.broadcast_warning.enabled = True
+# torch.utils.backcompat.keepdim_warning.enabled = True
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -28,6 +36,9 @@ from video_dataset import *
 from covariance import construct_covariance
 
 print("Tensor type: ", dtype)
+
+torch.manual_seed(opt.seed)
+random.seed(opt.seed)
 
 # ------- load the model first, as this affects the paths used --------
 if opt.load is not None:
@@ -97,13 +108,11 @@ optimizer = optim.Adam(
 
 sequence = None
 if opt.sanity:
-    n_steps = 10 * opt.batch_size
-    print_every = 10 * opt.batch_size
-else:
-    n_steps = int(5e8)
-    print_every = 200000
-# make print_every a multiple of batch_size
-print_every = (print_every // opt.batch_size) * opt.batch_size
+    opt.max_steps = 10 * opt.batch_size
+    opt.print_every = 10 * opt.batch_size
+
+# make opt.print_every a multiple of batch_size
+opt.print_every = (opt.print_every // opt.batch_size) * opt.batch_size
 
 # initialize statistics
 mean_loss = 0
@@ -116,13 +125,13 @@ z_var_means = []
 z_var_min = 1e6
 z_var_max = -1
 
-progress = progressbar.ProgressBar(max_value=print_every)
-while i < n_steps:
+progress = progressbar.ProgressBar(max_value=opt.print_every)
+while i < opt.max_steps:
     for sequence in train_loader:
         i += opt.batch_size
 
         sequence.transpose_(0, 1)
-        sequence = sequence_input(list(sequence))
+        sequence = sequence_input(list(sequence), dtype)
 
         kl_scale = 1
         # if opt.kl_anneal:
@@ -161,8 +170,9 @@ while i < n_steps:
                     p.grad.data += p.grad.data.clone().normal_(0, opt.lr)
         optimizer.step()
 
-        progress.update(i%print_every)
-        is_update_time = (i >= n_steps or (i % print_every == 0 and i > 0))
+        progress.update(i % opt.print_every)
+        is_update_time = (i >= opt.max_steps or
+                          (i % opt.print_every == 0 and i > 0))
         if is_update_time:
             progress.finish()
             clear_progressbar()
@@ -170,7 +180,7 @@ while i < n_steps:
             elapsed_time = progress.end_time - progress.start_time
             elapsed_seconds = elapsed_time.total_seconds()
 
-            batches = print_every / opt.batch_size
+            batches = opt.print_every / opt.batch_size
             log_values = (i,
                           mean_loss / batches,
                           mean_nll / batches,
@@ -178,7 +188,7 @@ while i < n_steps:
                           mean_prior_div / batches,
                           mean_trans_div / batches,
                           mean_grad_norm / batches,
-                          elapsed_seconds / print_every * 1000,
+                          elapsed_seconds / opt.print_every * 1000,
                           opt.lr)
             print(("Step: {:8d}, Loss: {:10.3f}, NLL: {:10.3f}, "
                    "Divergence: {:10.3f}, "
@@ -200,7 +210,7 @@ while i < n_steps:
             save_all_generations(model, sequence, generations)
 
         save_every = int(1e6)
-        if i >= n_steps or (i % save_every == 0 and i > 0):
+        if i >= opt.max_steps or (i % save_every == 0 and i > 0):
             save_dict = {
                     'model': model,
                     'opt': vars(opt),
@@ -209,7 +219,7 @@ while i < n_steps:
             torch.save(save_dict, opt.save + '/model.t7')
 
         if opt.seq_len > 1:
-            if i == n_steps or (i % 500000 == 0 and i > 0):
+            if i == opt.max_steps or (i % 500000 == 0 and i > 0):
                 construct_covariance(opt.save, model, train_loader, 2000,
                                      label="train_" + str(i))
                 construct_covariance(opt.save, model, test_loader, 2000,
@@ -223,7 +233,7 @@ while i < n_steps:
             set_lr(optimizer, opt.lr)
 
         if is_update_time:
-            progress = progressbar.ProgressBar(max_value=print_every)
+            progress = progressbar.ProgressBar(max_value=opt.print_every)
 
-        if i >= n_steps:
+        if i >= opt.max_steps:
             break
