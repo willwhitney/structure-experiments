@@ -89,6 +89,14 @@ def load_dataset(opt):
             train_data = data_checkpoint['train_data']
             test_data = data_checkpoint['test_data']
 
+            if train_data.image_size[1] != opt.image_width:
+                train_data.resize_([train_data.image_size[0], 
+                                    opt.image_width,
+                                    opt.image_width])
+                test_data.resize_([test_data.image_size[0], 
+                                   opt.image_width,
+                                   opt.image_width])
+
             train_data.seq_len = opt.seq_len
             test_data.seq_len = opt.seq_len
 
