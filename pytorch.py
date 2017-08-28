@@ -209,7 +209,7 @@ while i < opt.max_steps:
                    "Divergence: {:10.3f}, "
                    "Prior divergence: {:10.3f}, "
                    "Trans divergence: {:10.3f}, "
-                   "Z vars: [{:6.3f}, {:6.3f}, {:6.3f}], "
+                   "Z vars: [{:10.3f}, {:10.3f}, {:10.3f}], "
                    "Grad norm: {:10.3f}, "
                    "ms/seq: {:6.2f}").format(*print_values[:-1]))
 
