@@ -28,14 +28,17 @@ def get_videos(directory):
             filenames.append(directory)
             break
         else:
-            # form_filenames = glob.glob("{}/*.{}".format(directory, form))
+            form_filenames = glob.glob("{}/*.{}".format(directory, form))
+            filenames.extend(form_filenames)
+            # form_filenames = glob.glob(
+            #     "{}/camera2*.{}".format(directory, form))
             # filenames.extend(form_filenames)
-            form_filenames = glob.glob("{}/camera2*.{}".format(directory, form))
-            filenames.extend(form_filenames)
-            form_filenames = glob.glob("{}/camera4*.{}".format(directory, form))
-            filenames.extend(form_filenames)
-            form_filenames = glob.glob("{}/camera7*.{}".format(directory, form))
-            filenames.extend(form_filenames)
+            # form_filenames = glob.glob(
+            #     "{}/camera4*.{}".format(directory, form))
+            # filenames.extend(form_filenames)
+            # form_filenames = glob.glob(
+            #     "{}/camera7*.{}".format(directory, form))
+            # filenames.extend(form_filenames)
     return filenames
 
 class Video(list):
@@ -54,11 +57,29 @@ class Video(list):
             self.append(resized)
         v.close()
 
+    def resize_(self, image_size):
+        for i in range(len(self)):
+            current = self[i]
+            current.transpose_(0, 1).transpose_(1, 2).mul_(256)
+            resized = scipy.misc.imresize(current.numpy(), image_size[1:])
+            resized = torch.from_numpy(resized).float()
+            resized.transpose_(1, 2).transpose_(0, 1).div_(256)
+            self[i] = resized
+
 class VideoChunk(list):
     def __init__(self, frames, framerate):
         super(VideoChunk, self).__init__()
         self.extend(frames)
         self.fps = framerate
+
+    def resize_(self, image_size):
+        for i in range(len(self)):
+            current = self[i]
+            current.transpose_(0, 1).transpose_(1, 2).mul_(256)
+            resized = scipy.misc.imresize(current.numpy(), image_size[1:])
+            resized = torch.from_numpy(resized).float()
+            resized.transpose_(1, 2).transpose_(0, 1).div_(256)
+            self[i] = resized
 
 def load_wrap(f):
     def wrapper(self, *args, **kwargs):
@@ -94,7 +115,6 @@ class DiskVideoChunk():
     def __len__(self):
         return self.length
 
-
 def make_split_datasets(directory, seq_len, framerate,
                         image_width=128, chunk_length=1000, train_frac=0.8):
     filenames = get_videos(directory)
@@ -108,7 +128,7 @@ def make_split_datasets(directory, seq_len, framerate,
                 # chunk = VideoChunk(v[i : i + chunk_length], fps(fname))
                 chunk = DiskVideoChunk(v[i : i + chunk_length],
                                        fps(fname),
-                                       directory + '/_closeup_chunk_' + str(len(chunks)),
+                                       directory + '/_chunk_' + str(len(chunks)),
                                        fname)
                                     #    directory + '/_overhead_chunk_' + str(len(chunks)))
                 chunks.append(chunk)
@@ -150,8 +170,8 @@ class VideoData(Dataset):
     def __init__(self, directory, seq_len, framerate, image_width=128):
         self.seq_len = seq_len
         self.framerate = framerate
-        self.filenames = get_videos(directory)
         self.image_size = [3, image_width, image_width]
+        self.filenames = get_videos(directory)
 
         self.loaded = {}
 
@@ -197,6 +217,11 @@ class VideoData(Dataset):
         for v in self.videos:
             sequences += len(v) - self._end_padding(v)
         return sequences
+
+    def resize_(self, image_size):
+        self.image_size = image_size
+        for v in self.videos:
+            v.resize_(image_size)
 
 class ChunkData(VideoData):
     def __init__(self, chunks, seq_len, framerate,
