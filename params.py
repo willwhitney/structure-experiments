@@ -11,13 +11,10 @@ from env import *
 from util import *
 
 hostname = socket.gethostname()
-# if socket.gethostname() == 'zaan':
-#     dtype = torch.cuda.FloatTensor
-# else:
-#     dtype = torch.FloatTensor
-
-dtype = torch.FloatTensor
-# dtype = torch.cuda.FloatTensor
+if socket.gethostname().find('touchy') >= 0:
+    dtype = torch.FloatTensor
+else:
+    dtype = torch.cuda.FloatTensor
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--name', default=get_gpu())
@@ -70,6 +67,7 @@ parser.add_argument('--balls', default=1, type=int,
                     help="number of balls in the environment")
 
 parser.add_argument('--image-width', default=128, type=int)
+parser.add_argument('--channels', default=3, type=int)
 opt = parser.parse_args()
 
 # batch_size = opt.batch_size

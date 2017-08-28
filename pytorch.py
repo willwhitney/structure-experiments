@@ -88,12 +88,14 @@ train_loader = DataLoader(train_data,
                           num_workers=load_workers,
                           batch_size=opt.batch_size,
                           shuffle=True,
-                          drop_last=True)
+                          drop_last=True,
+                          pin_memory=True)
 test_loader = DataLoader(test_data,
                          num_workers=load_workers,
                          batch_size=opt.batch_size,
                          shuffle=True,
-                         drop_last=True)
+                         drop_last=True,
+                         pin_memory=True)
 print("Number of training sequences (with overlap): " + str(len(train_data)))
 print("Number of testing sequences (with overlap): " + str(len(test_data)))
 # ------------------------------------
@@ -130,8 +132,13 @@ progress = progressbar.ProgressBar(max_value=opt.print_every)
 while i < opt.max_steps:
     for sequence in train_loader:
         i += opt.batch_size
+        # pdb.set_trace()
 
-        sequence.transpose_(0, 1)
+        
+        if opt.data == 'mnist':
+            sequence = [sequence[0]]
+        else:
+           sequence.transpose_(0, 1)
         sequence = sequence_input(list(sequence), dtype)
 
         kl_scale = 1
@@ -208,7 +215,7 @@ while i < opt.max_steps:
             mean_trans_div = 0
             mean_grad_norm = 0
             mean_nll = 0
-            save_all_generations(model, sequence, generations)
+            save_all_generations(i, model, sequence, generations)
 
         save_every = int(1e6)
         if i >= opt.max_steps or (i % save_every == 0 and i > 0):

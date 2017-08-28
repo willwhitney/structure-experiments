@@ -57,7 +57,7 @@ elif opt.activation == 'selu':
 else:
     raise Exception("Activation was not specified properly.")
 
-eps = 1e-2
+eps = 1e-5
 class Transition(nn.Module):
     def __init__(self, hidden_dim, layers=4):
         super(Transition, self).__init__()

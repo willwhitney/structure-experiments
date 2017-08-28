@@ -4,8 +4,12 @@ import argparse
 import json
 import glob
 import os
+import shutil
 
+from torchvision import datasets, transforms
 from util import *
+
+hostname = socket.gethostname()
 
 def make_result_folder(opt, location):
     if not os.path.exists(location):
@@ -22,7 +26,10 @@ def make_result_folder(opt, location):
                 print("Not deleting anything. Quitting instead.")
                 exit()
             for f in filelist:
-                os.remove(f)
+                if os.path.isdir(f):
+                    shutil.rmtree(f)
+                else:
+                    os.remove(f)
 
     # copy over the old results if we're resuming
     if hasattr(opt, 'resume') and opt.resume:
@@ -107,6 +114,17 @@ def load_dataset(opt):
             test_data = HorizontalBounceData(
                 opt.seq_len, opt.balls, opt.colors, opt.image_width)
             load_workers = 0
+
+        elif opt.data == 'mnist':
+            train_data = datasets.MNIST('../data', train=True, download=True,
+                transform=transforms.Compose([
+                    transforms.Scale(opt.image_width),
+                    transforms.ToTensor()]))
+            test_data = datasets.MNIST('../data', train=False, 
+                transform=transforms.Compose([
+                    transforms.Scale(opt.image_width),
+                    transforms.ToTensor()]))
+            load_workers = 1
 
         # other video datasets are big and stored as chunks
         else:

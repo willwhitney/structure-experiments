@@ -7,6 +7,7 @@ import math
 import matplotlib.pyplot as plt
 import imageio
 import sys
+import pdb
 import shutil
 import git
 from torch.autograd import Variable
@@ -67,6 +68,9 @@ def image_tensor(inputs, padding=1):
 
 def make_image(tensor):
     tensor = tensor.cpu().clamp(0, 1)
+    if tensor.size(0) == 1:
+        tensor = tensor.expand(3, tensor.size(1), tensor.size(2))
+    # pdb.set_trace()
     return scipy.misc.toimage(tensor.numpy(),
                               high=255*tensor.max(),
                               channel_axis=0)
@@ -123,6 +127,18 @@ def sample(p):
     (mu, sigma) = p
     # noise = mu.clone()
     # noise.normal_(0, 1)
+    noise = torch.normal(torch.zeros(mu.size()), torch.ones(sigma.size()))
+    noise = noise.type_as(mu.data)
+    if isinstance(mu, torch.autograd.variable.Variable):
+        noise = torch.autograd.variable.Variable(noise)
+    return mu + sigma * noise
+
+def sample_log2(p):
+    (mu, log_sigma2) = p
+    # noise = mu.clone()
+    # noise.normal_(0, 1)
+    sigma = torch.exp(0.5 * log_sigma2)
+
     noise = torch.normal(torch.zeros(mu.size()), torch.ones(sigma.size()))
     noise = noise.type_as(mu.data)
     if isinstance(mu, torch.autograd.variable.Variable):

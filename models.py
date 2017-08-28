@@ -11,6 +11,7 @@ KL = GaussianKLD().type(dtype)
 # LL = GaussianLL().type(dtype)
 LL = MotionGaussianLL().type(dtype)
 mse = nn.MSELoss().type(dtype)
+bce = nn.BCELoss().type(dtype)
 
 class VAEModel(nn.Module):
     def __init__(self, hidden_dim, g_size):
@@ -64,6 +65,7 @@ class VAEModel(nn.Module):
             # z_sample = inferred_z_post[0]
 
             gen_dist = self.generator(z_sample)
+            # log_likelihood = LL(gen_dist, reshaped_sequence[t])
             log_likelihood = LL(gen_dist, reshaped_sequence[t])
             loss = loss - log_likelihood
 
@@ -137,12 +139,14 @@ class IndependentModel(nn.Module):
             Variable(torch.zeros(opt.batch_size, self.hidden_dim).type(dtype)),
             Variable(torch.ones(opt.batch_size, self.hidden_dim).type(dtype))
         )
-        self.z1_prior = (torch.cat([single_z1[0] for _ in range(n_latents)], 1),
-                         torch.cat([single_z1[1] for _ in range(n_latents)], 1))
+        self.z1_prior = (
+            torch.cat([single_z1[0] for _ in range(n_latents)], 1),
+            torch.cat([single_z1[1] for _ in range(n_latents)], 1)
+        )
 
         total_z_dim = n_latents * self.hidden_dim
 
-        image_dim = [3, self.img_size, self.img_size]
+        image_dim = [opt.channels, self.img_size, self.img_size]
 
         # trans = Transition(self.hidden_dim)
         self.transitions = nn.ModuleList([transition(self.hidden_dim,
@@ -184,7 +188,7 @@ class IndependentModel(nn.Module):
         reshaped_sequence = sequence
         # if isinstance(self.inference, ConvInference):
         reshaped_sequence = [x.resize(x.size(0),
-                                      3,
+                                      opt.channels,
                                       self.img_size,
                                       self.img_size)
                              for x in sequence]
@@ -224,6 +228,7 @@ class IndependentModel(nn.Module):
             log_likelihood = LL(gen_dist,
                                 reshaped_sequence[t],
                                 pixel_weights[t])
+            # log_likelihood = -bce(F.sigmoid(gen_dist[0]), reshaped_sequence[t])
             seq_nll = seq_nll - log_likelihood
 
             generations.append(gen_dist)
@@ -261,7 +266,8 @@ class IndependentModel(nn.Module):
 
         # if isinstance(self.inference, ConvInference) and priming[0].dim() != 4:
         if priming[0].dim() != 4:
-            priming = [x.resize(x.size(0), 3, self.img_size, self.img_size)
+            priming = [x.resize(
+                        x.size(0), opt.channels, self.img_size, self.img_size)
                        for x in priming]
 
         generations = [p.cpu() for p in priming]
@@ -288,7 +294,7 @@ class IndependentModel(nn.Module):
 
         # if isinstance(self.inference, ConvInference) and priming[0].dim() != 4:
         if priming[0].dim() != 4:
-            priming = [x.resize(x.size(0), 3, self.img_size, self.img_size)
+            priming = [x.resize(x.size(0), opt.channels, self.img_size, self.img_size)
                        for x in priming]
 
         generations = [[p.cpu() for p in priming]
@@ -327,7 +333,7 @@ class IndependentModel(nn.Module):
 
         # if isinstance(self.inference, ConvInference) and priming[0].dim() != 4:
         if priming[0].dim() != 4:
-            priming = [x.resize(x.size(0), 3, self.img_size, self.img_size)
+            priming = [x.resize(x.size(0), opt.channels, self.img_size, self.img_size)
                        for x in priming]
 
         generations = [[p.cpu() for p in priming]
@@ -356,7 +362,7 @@ class IndependentModel(nn.Module):
 
         # if isinstance(self.inference, ConvInference) and priming[0].dim() != 4:
         if priming[0].dim() != 4:
-            priming = [x.resize(x.size(0), 3, self.img_size, self.img_size)
+            priming = [x.resize(x.size(0), opt.channels, self.img_size, self.img_size)
                        for x in priming]
 
         generations = [[p.cpu() for p in priming]
@@ -430,7 +436,7 @@ class MSEModel(nn.Module):
         self.img_size = img_size
         self.hidden_dim = 100
 
-        image_dim = [3, self.img_size, self.img_size]
+        image_dim = [opt.channels, self.img_size, self.img_size]
         self.transition = Transition(self.hidden_dim)
         # self.first_inference = FirstInference(prod(image_dim), self.hidden_dim)
         # self.inference = Inference(prod(image_dim), self.hidden_dim)
@@ -449,7 +455,7 @@ class MSEModel(nn.Module):
 
         reshaped_sequence = sequence
         if isinstance(self.inference, ConvInference):
-            reshaped_sequence = [x.resize(x.size(0), 3, self.img_size, self.img_size)
+            reshaped_sequence = [x.resize(x.size(0), opt.channels, self.img_size, self.img_size)
                                  for x in sequence]
         # reshaped_sequence = [x.transpose(2, 3).transpose(1, 2)
         #                      for x in reshaped_sequence]
@@ -495,7 +501,7 @@ class MSEModel(nn.Module):
         generations = [priming[0]]
 
         if isinstance(self.inference, ConvInference):
-            priming = [x.resize(x.size(0),  3, self.img_size, self.img_size)
+            priming = [x.resize(x.size(0), opt.channels, self.img_size, self.img_size)
                        for x in priming]
         # priming = [x.transpose(2, 3).transpose(1, 2)
         #                      for x in priming]

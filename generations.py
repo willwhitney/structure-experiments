@@ -2,28 +2,50 @@ import torch
 from util import *
 from params import *
 from models import *
+import os
 
-def save_all_generations(model, sequence, generations):
+def ensure_path_exists(fn):
+    def wrapper(path, *args, **kwargs):
+        try:
+            fn(path, *args, **kwargs)
+        except FileNotFoundError:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            fn(path, *args, **kwargs)
+    return wrapper
+
+def save_all_generations(step, model, sequence, generations):
     # volatile input -> no saved intermediate values
     # for x in sequence:
     #     x.volatile = True
-
     priming = sequence[:2]
 
-    save_posterior(model, sequence, generations)
-    save_z1_samples(model)
-    save_interpolation(model, priming)
+    def mkpath(name):
+        return os.path.join(opt.save, name, str(step) + '-')
+
+    save_posterior(mkpath("reconstruction"),
+        model, sequence, generations)
+    save_z1_samples(mkpath("prior_sample"),
+        model)
+    save_interpolation(mkpath("interpolation"),
+        model, priming)
 
     # these depend on priming the model first, then predicting in some way
     if opt.seq_len > 1:
-        save_generations(model, priming)
-        save_ml(model, priming)
-        save_independent_ml(model, priming)
-        save_independent_gen(model, priming)
-        save_independent_resample(model, priming)
-        save_single_replacement(model, sequence)
+        save_generations(mkpath("generation"),
+            model, priming)
+        save_ml(mkpath("ml_generation"),
+            model, priming)
+        save_independent_ml(mkpath("ind_ml"),
+            model, priming)
+        save_independent_gen(mkpath("ind_gen"),
+            model, priming)
+        save_independent_resample(mkpath("ind_resample"),
+            model, priming)
+        save_single_replacement(mkpath("ind_replace"),
+            model, sequence)
 
-def save_posterior(model, sequence, generations):
+@ensure_path_exists
+def save_posterior(path, model, sequence, generations):
     # save some results from the latest batch
     mus_data = [gen[0].data for gen in generations]
     seq_data = [x.data for x in sequence]
@@ -32,10 +54,10 @@ def save_posterior(model, sequence, generations):
                for x in mus_data]
         truth = [x[j] #.view(3,image_width,image_width)
                  for x in seq_data]
-        save_tensors_image(opt.save + '/result_'+str(j)+'.png',
-                           [truth, mus])
+        save_tensors_image(path + str(j) + '.png', [truth, mus])
 
-def save_generations(model, priming):
+@ensure_path_exists
+def save_generations(path, model, priming):
     for p in priming:
         p.volatile = True
 
@@ -45,10 +67,11 @@ def save_generations(model, priming):
     for j in range(5):
         mu = [x[j] #.view(3,image_width,image_width)
               for x in mus]
-        save_tensors_image(opt.save + '/gen_'+str(j)+'.png', mu)
-        save_gif(opt.save + '/gen_'+str(j)+'.gif', mu)
+        save_tensors_image(path +str(j) + '.png', mu)
+        save_gif(path + str(j) + '.gif', mu)
 
-def save_ml(model, priming):
+@ensure_path_exists
+def save_ml(path, model, priming):
     for p in priming:
         p.volatile = True
 
@@ -58,20 +81,21 @@ def save_ml(model, priming):
     for j in range(5):
         mu = [x[j] #.view(3,image_width,image_width)
               for x in mus]
-        save_tensors_image(opt.save + '/ml_'+str(j)+'.png', mu)
-        save_gif(opt.save + '/ml_'+str(j)+'.gif', mu)
+        save_tensors_image(path + str(j)+'.png', mu)
+        save_gif(path + str(j)+'.gif', mu)
 
-def save_z1_samples(model):
+@ensure_path_exists
+def save_z1_samples(path, model):
     # save samples from the first-frame prior
     if not isinstance(model, MSEModel):
         prior_sample = sample(model.z1_prior)
         image_dist = model.generator(prior_sample)
         image_sample = image_dist[0] #.resize(32, 3, image_width, image_width)
         image_sample = [[image] for image in image_sample]
-        save_tensors_image(opt.save + '/prior_samples.png',
-                           image_sample)
+        save_tensors_image(path + '.png', image_sample)
 
-def save_independent_ml(model, priming):
+@ensure_path_exists
+def save_independent_ml(path, model, priming):
     for p in priming:
         p.volatile = True
 
@@ -84,15 +108,16 @@ def save_independent_ml(model, priming):
             image = [[x[j] #.view(3,image_width,image_width)
                       for x in sample_row]
                       for sample_row in samples]
-            save_tensors_image(opt.save + '/ind_ml_'+str(j)+'.png',
+            save_tensors_image(path + str(j)+'.png',
                                image)
             stacked = [image_tensor([image[i][t]
                                      for i in range(len(image))])
                        for t in range(len(image[0]))]
-            save_gif(opt.save + '/ind_ml_' + str(j) + '.gif',
+            save_gif(path + str(j) + '.gif',
                      stacked)
 
-def save_independent_gen(model, priming):
+@ensure_path_exists
+def save_independent_gen(path, model, priming):
     for p in priming:
         p.volatile = True
 
@@ -105,14 +130,15 @@ def save_independent_gen(model, priming):
             image = [[x[j] #.view(3,image_width,image_width)
                       for x in sample_row]
                       for sample_row in samples]
-            save_tensors_image(opt.save + '/ind_gen_'+str(j)+'.png',
+            save_tensors_image(path +str(j)+'.png',
                                image)
             stacked = [image_tensor([image[i][t] for i in range(len(image))])
                        for t in range(len(image[0]))]
-            save_gif(opt.save + '/ind_gen_' + str(j) + '.gif',
+            save_gif(path + str(j) + '.gif',
                      stacked)
 
-def save_independent_resample(model, priming):
+@ensure_path_exists
+def save_independent_resample(path, model, priming):
     for p in priming:
         p.volatile = True
 
@@ -126,10 +152,11 @@ def save_independent_resample(model, priming):
                       for x in sample_row]
                       for sample_row in samples]
             save_tensors_image(
-                opt.save + '/ind_resample_'+str(j)+'.png',
+                path + str(j)+'.png',
                 image)
 
-def save_interpolation(model, priming):
+@ensure_path_exists
+def save_interpolation(path, model, priming):
     for p in priming:
         p.volatile = True
 
@@ -145,18 +172,18 @@ def save_interpolation(model, priming):
                   for x in sample_row]
                   for sample_row in samples]
         save_tensors_image(
-            opt.save + '/interp_'+str(j)+'.png',
+            path + str(j)+'.png',
             image)
         image = [x[2:] for x in image]
         stacked = [image_tensor([image[i][t] for i in range(len(image))])
                    for t in range(len(image[0]))]
-        save_gif(opt.save + '/interp_' + str(j) + '.gif',
+        save_gif(path + str(j) + '.gif',
                  stacked,
                  bounce=True,
                  duration=0.1)
 
-
-def save_single_replacement(model, sequence):
+@ensure_path_exists
+def save_single_replacement(path, model, sequence):
     samples = model.generate_independent_posterior(sequence)
     samples = [[x.data for x in sample_row]
                for sample_row in samples]
@@ -166,11 +193,11 @@ def save_single_replacement(model, sequence):
                   for x in sample_row]
                   for sample_row in samples]
         save_tensors_image(
-            opt.save + '/ind_replace_' + str(j) + '.png',
+            path + str(j) + '.png',
             image)
         stacked = [image_tensor([image[i][t] for i in range(len(image))])
                    for t in range(len(image[0]))]
-        save_gif(opt.save + '/ind_replace_' + str(j) + '.gif',
+        save_gif(path + str(j) + '.gif',
                  stacked)
 
     # for x in sequence:
