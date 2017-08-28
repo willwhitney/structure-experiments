@@ -28,8 +28,8 @@ parser.add_argument('--git', dest='git', action='store_true')
 parser.add_argument('--no-git', dest='git', action='store_false')
 parser.set_defaults(git=True)
 
-parser.add_argument('--kl-anneal', dest='kl-anneal', action='store_true')
-parser.add_argument('--no-kl-anneal', dest='kl-anneal', action='store_false')
+parser.add_argument('--kl-anneal', dest='kl_anneal', action='store_true')
+parser.add_argument('--no-kl-anneal', dest='kl_anneal', action='store_false')
 parser.set_defaults(kl_anneal=True)
 
 parser.add_argument('--load', default=None)

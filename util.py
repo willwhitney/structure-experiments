@@ -368,3 +368,43 @@ def get_commit_hash():
 
 def sequence_input(seq, dtype):
     return [Variable(x.type(dtype)) for x in seq]
+
+def conv_out_dim(in_planes, out_planes, in_height, in_width, kernel_size,
+                 stride=1, padding=0, dilation=1):
+    dilated_kernel = dilation * (kernel_size - 1)
+    out_height = math.floor(
+        (in_height + 2 * padding - dilated_kernel - 1) / stride + 1)
+    out_width = math.floor(
+        (in_width + 2 * padding - dilated_kernel - 1) / stride + 1)
+    return out_planes, out_height, out_width
+
+def conv_in_dim(out_height, out_width, kernel_size,
+                 stride=1, padding=0, dilation=1):
+    dilated_kernel = dilation * (kernel_size - 1)
+    # (out_height - 1) * stride = in_height + 2 * padding - dilated_kernel - 1
+    in_height = math.ceil(
+        (out_height - 1) * stride - 2 * padding + dilated_kernel + 1)
+    in_width = math.ceil(
+        (out_width - 1) * stride - 2 * padding + dilated_kernel + 1)
+    return in_height, in_width
+
+def conv_transpose_in_dim(out_height, out_width, kernel_size,
+                          stride=1, padding=0, dilation=1):
+    # dilated_kernel = dilation * (kernel_size - 1)
+    dilated_kernel = kernel_size
+    in_height = math.ceil(
+        (out_height - dilated_kernel + 2 * padding) / stride + 1)
+    in_width = math.ceil(
+        (out_width - dilated_kernel + 2 * padding) / stride + 1)
+    return in_height, in_width
+
+def conv_transpose_out_dim(in_height, in_width, kernel_size,
+                          stride=1, padding=0, dilation=1):
+    # dilated_kernel = dilation * (kernel_size - 1)
+    dilated_kernel = kernel_size
+    out_height = math.ceil(
+        (in_height - 1) * stride - 2 * padding + dilated_kernel)
+    out_width = math.floor(
+        (in_width - 1) * stride - 2 * padding + dilated_kernel)
+    return out_height, out_width
+

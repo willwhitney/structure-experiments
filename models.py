@@ -7,9 +7,10 @@ from util import *
 from modules import *
 from params import *
 
-KL = GaussianKLD().type(dtype)
-# LL = GaussianLL().type(dtype)
-LL = MotionGaussianLL().type(dtype)
+KL = LogSquaredGaussianKLD().type(dtype)
+LL = GaussianLL().type(dtype)
+# LL = MotionGaussianLL().type(dtype)
+# LL = LogSquaredGaussianLL().type(dtype)
 mse = nn.MSELoss().type(dtype)
 bce = nn.BCELoss().type(dtype)
 
@@ -148,17 +149,9 @@ class IndependentModel(nn.Module):
 
         image_dim = [opt.channels, self.img_size, self.img_size]
 
-        # trans = Transition(self.hidden_dim)
         self.transitions = nn.ModuleList([transition(self.hidden_dim,
                                                      layers=opt.trans_layers)
                                           for _ in range(n_latents)])
-        # self.first_inference = FirstInference(prod(image_dim), total_z_dim)
-        # self.inference = Inference(prod(image_dim), total_z_dim)
-        # self.generator = Generator(total_z_dim, prod(image_dim))
-
-        # self.first_inference = ConvFirstInference(image_dim, total_z_dim)
-        # self.inference = ConvInference(image_dim, total_z_dim)
-        # self.generator = ConvGenerator(total_z_dim, image_dim)
 
         self.first_inference = first_inference(image_dim, total_z_dim)
         self.inference = inference(image_dim, total_z_dim)
@@ -174,7 +167,7 @@ class IndependentModel(nn.Module):
                      torch.cat([prior[1] for prior in z_prior], 1))
         return cat_prior
 
-    def forward(self, sequence, kl_scale=1, motion_weight=0):
+    def forward(self, sequence, motion_weight=0):
         # loss = Variable(torch.zeros(1).type(dtype))
         seq_divergence = Variable(torch.zeros(1).type(dtype))
         seq_prior_div = Variable(torch.zeros(1).type(dtype))
@@ -200,36 +193,40 @@ class IndependentModel(nn.Module):
         z_var_min = 1e6
         z_var_max = -1
 
-        if len(sequence) > 1:
-            diffs = motion_diffs(sequence)
-            pixel_weights = [diff * motion_weight + 1 for diff in diffs]
-        else:
-            ones = Variable(torch.ones(sequence[0].size()).type(dtype))
-            pixel_weights = [ones]
+        # if len(sequence) > 1:
+        #     diffs = motion_diffs(sequence)
+        #     pixel_weights = [diff * motion_weight + 1 for diff in diffs]
+        # else:
+        #     ones = Variable(torch.ones(sequence[0].size()).type(dtype))
+        #     pixel_weights = [ones]
 
         for t in range(len(sequence)):
-            inferred_z_post[0].register_hook(lambda grad: grad * kl_scale)
-            inferred_z_post[1].register_hook(lambda grad: grad * kl_scale)
+            # inferred_z_post[0].register_hook(lambda grad: grad * kl_scale)
+            # inferred_z_post[1].register_hook(lambda grad: grad * kl_scale)
 
             divergence = KL(inferred_z_post, cat_prior)
             seq_divergence = seq_divergence + divergence
+            if math.isnan(seq_divergence.data.sum()):
+                pdb.set_trace()
             if t == 0:
                 seq_prior_div = seq_prior_div + divergence
             else:
                 seq_trans_div = seq_trans_div + divergence
 
-            # loss = loss + divergence
+            z_var_mean += inferred_z_post[1].mean().data[0]
+            z_var_min = min(z_var_min, inferred_z_post[1].data.min())
+            z_var_max = max(z_var_max, inferred_z_post[1].data.max())
 
-            z_sample = sample(inferred_z_post)
-            # z_sample = inferred_z_post[0]
+            z_sample = sample_log2(inferred_z_post)
 
             gen_dist = self.generator(z_sample)
             # import ipdb; ipdb.set_trace()
             log_likelihood = LL(gen_dist,
-                                reshaped_sequence[t],
-                                pixel_weights[t])
+                                reshaped_sequence[t])
             # log_likelihood = -bce(F.sigmoid(gen_dist[0]), reshaped_sequence[t])
             seq_nll = seq_nll - log_likelihood
+            if math.isnan(seq_nll.data.sum()):
+                pdb.set_trace()
 
             generations.append(gen_dist)
 
@@ -242,9 +239,9 @@ class IndependentModel(nn.Module):
                 # give it the mean of the prior p(z_t | z_{t-1})
                 inferred_z_post = self.inference(reshaped_sequence[t+1],
                                                  cat_prior[0])
-                z_var_mean += cat_prior[1].mean().data[0]
-                z_var_min = min(z_var_min, cat_prior[1].data.min())
-                z_var_max = max(z_var_max, cat_prior[1].data.max())
+                # z_var_mean += cat_prior[1].mean().data[0]
+                # z_var_min = min(z_var_min, cat_prior[1].data.min())
+                # z_var_max = max(z_var_max, cat_prior[1].data.max())
 
         seq_divergence = seq_divergence / len(sequence)
         seq_prior_div = seq_prior_div
@@ -257,8 +254,8 @@ class IndependentModel(nn.Module):
         return (generations,
                 # loss / len(sequence),
                 seq_nll / len(sequence),
-                (seq_divergence, seq_prior_div, seq_trans_div))
-                # (z_var_min, z_var_mean, z_var_max))
+                (seq_divergence, seq_prior_div, seq_trans_div), 
+                (z_var_min, z_var_mean, z_var_max))
 
     def generate(self, priming, steps, sampling=True):
         priming_steps = len(priming)
@@ -283,9 +280,9 @@ class IndependentModel(nn.Module):
             latent_dist = self.predict_latent(latent)
 
             if sampling:
-                latent = sample(latent_dist)
+                latent = sample_log2(latent_dist)
             else:
-                latent = sample((latent_dist[0], latent_dist[1] / 100))
+                latent = latent_dist[0]
             generations.append(self.generator(latent)[0].cpu())
         return generations
 
@@ -319,9 +316,9 @@ class IndependentModel(nn.Module):
                 predicted_z = trans(previous)
 
                 if sampling:
-                    new_z = sample(predicted_z)
+                    new_z = sample_log2(predicted_z)
                 else:
-                    new_z = sample((predicted_z[0], predicted_z[1] / 100))
+                    new_z = predicted_z[0]
                 latent[:, z_i*self.hidden_dim : (z_i+1)*self.hidden_dim] = new_z
 
                 generations[z_i].append(self.generator(latent)[0].cpu())
@@ -404,7 +401,7 @@ class IndependentModel(nn.Module):
         cat_prior = self.z1_prior
         for t in range(len(sequence)):
             posteriors.append(inferred_z_post[0])
-            z_sample = sample((inferred_z_post[0], inferred_z_post[1] / 100))
+            z_sample = inferred_z_post[0]
             gen_dist = self.generator(z_sample)
             posterior_generations.append(gen_dist[0].cpu())
 

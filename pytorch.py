@@ -126,7 +126,7 @@ mean_trans_div = 0
 mean_grad_norm = 0
 z_var_means = []
 z_var_min = 1e6
-z_var_max = -1
+z_var_max = -1e6
 
 progress = progressbar.ProgressBar(max_value=opt.print_every)
 while i < opt.max_steps:
@@ -141,12 +141,7 @@ while i < opt.max_steps:
            sequence.transpose_(0, 1)
         sequence = sequence_input(list(sequence), dtype)
 
-        kl_scale = 1
-        # if opt.kl_anneal:
-        #     kl_scale = max(0, min(i / opt.kl_anneal_end, 1))
-
-        generations, nll, divergences = model(sequence,
-                                              kl_scale=kl_scale,
+        generations, nll, divergences, batch_z_vars = model(sequence,
                                               motion_weight=opt.motion_weight)
         (seq_divergence, seq_prior_div, seq_trans_div) = divergences
         mean_divergence += seq_divergence.data[0]
@@ -154,10 +149,10 @@ while i < opt.max_steps:
         mean_trans_div += seq_trans_div.data[0]
         mean_nll += nll.data[0]
 
-        # var_min, var_mean, var_max = batch_z_vars
-        # z_var_means.append(var_mean)
-        # z_var_min = min(var_min, z_var_min)
-        # z_var_max = max(var_max, z_var_max)
+        var_min, var_mean, var_max = batch_z_vars
+        z_var_means.append(var_mean)
+        z_var_min = min(var_min, z_var_min)
+        z_var_max = max(var_max, z_var_max)
 
         kl_penalty = seq_divergence * opt.kl_weight
         if opt.kl_anneal:
@@ -189,6 +184,18 @@ while i < opt.max_steps:
             elapsed_seconds = elapsed_time.total_seconds()
 
             batches = opt.print_every / opt.batch_size
+            print_values = (i,
+                          mean_loss / batches,
+                          mean_nll / batches,
+                          mean_divergence / batches,
+                          mean_prior_div / batches,
+                          mean_trans_div / batches,
+                          z_var_min, 
+                          sum(z_var_means) / len(z_var_means),
+                          z_var_max,
+                          mean_grad_norm / batches,
+                          elapsed_seconds / opt.print_every * 1000,
+                          opt.lr)
             log_values = (i,
                           mean_loss / batches,
                           mean_nll / batches,
@@ -202,8 +209,9 @@ while i < opt.max_steps:
                    "Divergence: {:10.3f}, "
                    "Prior divergence: {:10.3f}, "
                    "Trans divergence: {:10.3f}, "
+                   "Z vars: [{:10.3f}, {:10.3f}, {:10.3f}], "
                    "Grad norm: {:10.3f}, "
-                   "ms/seq: {:6.2f}").format(*log_values[:-1]))
+                   "ms/seq: {:6.2f}").format(*print_values[:-1]))
 
             # make list of n copies of format string, then format
             format_string = ",".join(["{:.8e}"]*len(log_values))
@@ -215,6 +223,9 @@ while i < opt.max_steps:
             mean_trans_div = 0
             mean_grad_norm = 0
             mean_nll = 0
+            z_var_means = []
+            z_var_min = 1e6
+            z_var_max = -1e6
             save_all_generations(i, model, sequence, generations)
 
         save_every = int(1e6)
