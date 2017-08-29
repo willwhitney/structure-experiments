@@ -125,9 +125,11 @@ while i < opt.max_steps:
         i += opt.batch_size
         # pdb.set_trace()
 
-        
         if opt.data == 'mnist':
             sequence = [sequence[0]]
+        elif opt.data == 'moving-mnist':
+            sequence = sequence[0].unsqueeze(2)
+            sequence.transpose_(0, 1)
         else:
             sequence.transpose_(0, 1)
             # resized_sequence = []

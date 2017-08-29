@@ -136,23 +136,19 @@ def load_dataset(opt):
                 transform=transforms.Compose([
                     transforms.Scale(opt.image_width),
                     transforms.ToTensor()]))
-            test_data = datasets.MNIST('../data', train=False, 
+            test_data = datasets.MNIST('../data', train=False,
                 transform=transforms.Compose([
                     transforms.Scale(opt.image_width),
                     transforms.ToTensor()]))
             load_workers = 1
 
         elif opt.data == 'moving-mnist':
-            train_data = MovingMNIST(train=True, seq_len=opt.seq_len,
-                transform=transforms.Compose([
-                    transforms.ToPILImage(),
-                    transforms.Scale(opt.image_width),
-                    transforms.ToTensor()]))
-            test_data = MovingMNIST(train=False, seq_len=opt.seq_len,
-                transform=transforms.Compose([
-                    transforms.ToPILImage(),
-                    transforms.Scale(opt.image_width),
-                    transforms.ToTensor()]))
+            train_data = MovingMNIST(train=True, 
+                                     seq_len=opt.seq_len,
+                                     image_size=opt.image_width)
+            test_data = MovingMNIST(train=False, 
+                                     seq_len=opt.seq_len,
+                                     image_size=opt.image_width)
             load_workers = 1
 
         # other video datasets are big and stored as chunks

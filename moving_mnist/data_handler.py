@@ -5,13 +5,16 @@ import sys
 import datetime
 from random import randint
 
+import scipy.misc
+
 
 class BouncingMNISTDataHandler(object):
     """Data Handler that creates Bouncing MNIST dataset on the fly."""
 
-    def __init__(self, seq_length = 20):
+    def __init__(self, seq_length = 20, output_image_size=64):
         self.seq_length_ = seq_length
         self.image_size_ = 64
+        self.output_image_size = output_image_size
         self.num_digits_ = 2
         self.step_length_ = 0.1
 
@@ -79,6 +82,15 @@ class BouncingMNISTDataHandler(object):
         return np.maximum(a, b)
         # return b
 
+    def Resize(self, data, size):
+        output_data = np.zeros((self.seq_length_, size, size), 
+                               dtype=np.float32)
+
+        for i, frame in enumerate(data):
+            output_data[i] = scipy.misc.imresize(frame, (size, size))
+
+        return output_data
+
     def GetItem(self, verbose=False):
         start_y, start_x = self.GetRandomTrajectory(self.num_digits_)
 
@@ -105,4 +117,7 @@ class BouncingMNISTDataHandler(object):
                 data[i, top:bottom, left:right] = self.Overlap(
                     data[i, top:bottom, left:right], digit_image)
 
-        return data
+        if self.output_image_size == self.image_size_:
+            return data
+        else:
+            return self.resize(data, self.output_image_size)
