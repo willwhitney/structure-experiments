@@ -274,7 +274,7 @@ class IndependentModel(nn.Module):
         # generations.append(self.generator(latent)[0])
         for t in range(1, priming_steps):
             latent = self.inference(priming[t],
-                                    self.predict_latent(latent)[0])[0]
+                                    self.predict_latent(latent))[0]
             # generations.append(self.generator(latent)[0])
 
         for t in range(steps - priming_steps):
@@ -304,7 +304,7 @@ class IndependentModel(nn.Module):
         # [generations[i].append(generation) for i in range(len(generations))]
         for t in range(1, priming_steps):
             latent = self.inference(priming[t],
-                                    self.predict_latent(latent)[0])[0]
+                                    self.predict_latent(latent))[0]
             # generation = self.generator(latent)[0]
             # [generations[i].append(generation) for i in range(len(generations))]
 
@@ -342,7 +342,7 @@ class IndependentModel(nn.Module):
         # [generations[i].append(generation) for i in range(len(generations))]
         for t in range(1, priming_steps):
             latent = self.inference(priming[t],
-                                    self.predict_latent(latent)[0])[0]
+                                    self.predict_latent(latent))[0]
             # generation = self.generator(latent)[0]
             # [generations[i].append(generation) for i in range(len(generations))]
 
@@ -371,7 +371,7 @@ class IndependentModel(nn.Module):
         # [generations[i].append(generation) for i in range(len(generations))]
         for t in range(1, priming_steps):
             latent = self.inference(priming[t],
-                                    self.predict_latent(latent)[0])[0]
+                                    self.predict_latent(latent))[0]
             # generation = self.generator(latent)[0]
             # [generations[i].append(generation) for i in range(len(generations))]
 
@@ -410,7 +410,7 @@ class IndependentModel(nn.Module):
             if t < len(sequence) - 1:
                 cat_prior = self.predict_latent(z_sample)
                 inferred_z_post = self.inference(sequence[t+1],
-                                                 cat_prior[0])
+                                                 cat_prior)
 
         priming_steps = 2
         all_generations = [posterior_generations]
