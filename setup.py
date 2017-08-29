@@ -11,6 +11,7 @@ from util import *
 from atari_dataset import AtariData
 from video_dataset import *
 from env import *
+from moving_mnist.dataset import MovingMNIST
 
 hostname = socket.gethostname()
 
@@ -137,6 +138,19 @@ def load_dataset(opt):
                     transforms.ToTensor()]))
             test_data = datasets.MNIST('../data', train=False, 
                 transform=transforms.Compose([
+                    transforms.Scale(opt.image_width),
+                    transforms.ToTensor()]))
+            load_workers = 1
+
+        elif opt.data == 'moving-mnist':
+            train_data = MovingMNIST(train=True, seq_len=opt.seq_len,
+                transform=transforms.Compose([
+                    transforms.ToPILImage(),
+                    transforms.Scale(opt.image_width),
+                    transforms.ToTensor()]))
+            test_data = MovingMNIST(train=False, seq_len=opt.seq_len,
+                transform=transforms.Compose([
+                    transforms.ToPILImage(),
                     transforms.Scale(opt.image_width),
                     transforms.ToTensor()]))
             load_workers = 1

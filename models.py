@@ -155,7 +155,7 @@ class IndependentModel(nn.Module):
                                                      layers=opt.trans_layers)
                                           for _ in range(n_latents)])
 
-        self.first_inference = first_inference(image_dim, total_z_dim)
+        # self.first_inference = first_inference(image_dim, total_z_dim)
         self.inference = inference(image_dim, total_z_dim)
         self.generator = generator(total_z_dim, image_dim)
 
@@ -188,12 +188,12 @@ class IndependentModel(nn.Module):
                                       self.img_size)
                              for x in sequence]
 
-        inferred_z_post = self.first_inference(reshaped_sequence[0])
+        # inferred_z_post = self.first_inference(reshaped_sequence[0])
         cat_prior = self.z1_prior
 
         z_var_mean = 0
         z_var_min = 1e6
-        z_var_max = -1
+        z_var_max = -1e6
 
         # if len(sequence) > 1:
         #     diffs = motion_diffs(sequence)
@@ -203,8 +203,12 @@ class IndependentModel(nn.Module):
         #     pixel_weights = [ones]
 
         for t in range(len(sequence)):
-            # inferred_z_post[0].register_hook(lambda grad: grad * kl_scale)
-            # inferred_z_post[1].register_hook(lambda grad: grad * kl_scale)
+            # give it the sample from z_{t-1}
+            # inferred_z_post = self.inference(reshaped_sequence[t+1], z_sample)
+
+            # give it the mean and logvar2 of the prior p(z_t | z_{t-1})
+            inferred_z_post = self.inference(reshaped_sequence[t],
+                                             cat_prior)
 
             divergence = KL(inferred_z_post, cat_prior)
             seq_divergence = seq_divergence + divergence
@@ -235,12 +239,7 @@ class IndependentModel(nn.Module):
             if t < len(sequence) - 1:
                 cat_prior = self.predict_latent(z_sample)
 
-                # give it the sample from z_{t-1}
-                # inferred_z_post = self.inference(reshaped_sequence[t+1], z_sample)
 
-                # give it the mean and logvar2 of the prior p(z_t | z_{t-1})
-                inferred_z_post = self.inference(reshaped_sequence[t+1],
-                                                 cat_prior)
                 # z_var_mean += cat_prior[1].mean().data[0]
                 # z_var_min = min(z_var_min, cat_prior[1].data.min())
                 # z_var_max = max(z_var_max, cat_prior[1].data.max())
@@ -270,11 +269,11 @@ class IndependentModel(nn.Module):
                        for x in priming]
 
         generations = [p.cpu() for p in priming]
-        latent = self.first_inference(priming[0])[0]
+        latent = self.inference(priming[0], self.z1_prior)[0]
         # generations.append(self.generator(latent)[0])
         for t in range(1, priming_steps):
             latent = self.inference(priming[t],
-                                    self.predict_latent(latent)[0])[0]
+                                    self.predict_latent(latent))[0]
             # generations.append(self.generator(latent)[0])
 
         for t in range(steps - priming_steps):
@@ -299,12 +298,12 @@ class IndependentModel(nn.Module):
         generations = [[p.cpu() for p in priming]
                        for _ in range(self.n_latents)]
 
-        latent = self.first_inference(priming[0])[0]
+        latent = self.inference(priming[0], self.z1_prior)[0]
         # generation = self.generator(latent)[0]
         # [generations[i].append(generation) for i in range(len(generations))]
         for t in range(1, priming_steps):
             latent = self.inference(priming[t],
-                                    self.predict_latent(latent)[0])[0]
+                                    self.predict_latent(latent))[0]
             # generation = self.generator(latent)[0]
             # [generations[i].append(generation) for i in range(len(generations))]
 
@@ -337,12 +336,12 @@ class IndependentModel(nn.Module):
 
         generations = [[p.cpu() for p in priming]
                        for _ in range(self.n_latents)]
-        latent = self.first_inference(priming[0])[0]
+        latent = self.inference(priming[0], self.z1_prior)[0]
         # generation = self.generator(latent)[0]
         # [generations[i].append(generation) for i in range(len(generations))]
         for t in range(1, priming_steps):
             latent = self.inference(priming[t],
-                                    self.predict_latent(latent)[0])[0]
+                                    self.predict_latent(latent))[0]
             # generation = self.generator(latent)[0]
             # [generations[i].append(generation) for i in range(len(generations))]
 
@@ -366,12 +365,12 @@ class IndependentModel(nn.Module):
 
         generations = [[p.cpu() for p in priming]
                        for _ in range(self.n_latents)]
-        latent = self.first_inference(priming[0])[0]
+        latent = self.inference(priming[0], self.z1_prior)[0]
         # generation = self.generator(latent)[0]
         # [generations[i].append(generation) for i in range(len(generations))]
         for t in range(1, priming_steps):
             latent = self.inference(priming[t],
-                                    self.predict_latent(latent)[0])[0]
+                                    self.predict_latent(latent))[0]
             # generation = self.generator(latent)[0]
             # [generations[i].append(generation) for i in range(len(generations))]
 
@@ -398,7 +397,7 @@ class IndependentModel(nn.Module):
 
         posteriors = []
         posterior_generations = []
-        inferred_z_post = self.first_inference(sequence[0])
+        inferred_z_post = self.inference(sequence[0], self.z1_prior)
 
         cat_prior = self.z1_prior
         for t in range(len(sequence)):
@@ -410,7 +409,7 @@ class IndependentModel(nn.Module):
             if t < len(sequence) - 1:
                 cat_prior = self.predict_latent(z_sample)
                 inferred_z_post = self.inference(sequence[t+1],
-                                                 cat_prior[0])
+                                                 cat_prior)
 
         priming_steps = 2
         all_generations = [posterior_generations]

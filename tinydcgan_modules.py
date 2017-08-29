@@ -117,7 +117,9 @@ class TinyDCGANInference(nn.Module):
                 self.kernels[l],
                 padding=self.pads[l],
                 stride=self.strides[l])))
+
         self.convs = nn.ModuleList()
+        self.conv_bns = nn.ModuleList()
         for l in range(len(self.planes)):
             # confusingly this is actually offset by 1
             in_planes, in_height, in_width = self.out_dims[l]
@@ -127,6 +129,9 @@ class TinyDCGANInference(nn.Module):
                                         self.kernels[l],
                                         padding=self.pads[l],
                                         stride=self.strides[l]))
+            if l < len(self.planes) - 1:
+                self.conv_bns.append(nn.BatchNorm2d(int(self.planes[l])))
+
 
         # self.conv1 = nn.Conv2d(input_dims[0], 32, 3)
 
@@ -143,8 +148,10 @@ class TinyDCGANInference(nn.Module):
 
     def forward(self, x_t, prior):
         current = x_t
-        for conv in self.convs:
+        for i, conv in enumerate(self.convs):
             current = conv(current)
+            if i < len(self.convs) - 1:
+                current = self.conv_bns[i](current)
             current = activation(current)
         current = current.resize(current.size(0), prod(self.out_dims[-1]))
         current = self.input_lin(current)
@@ -152,7 +159,7 @@ class TinyDCGANInference(nn.Module):
 
         joined = torch.cat([current, *prior], 1)
         new_hidden = activation(self.joint_lin(joined))
-        new_hidden = activation(self.merged_lin(joined))
+        new_hidden = activation(self.merged_lin(new_hidden))
 
         # mu = 10 * F.tanh(self.lin_mu(new_hidden) / 10)
         mu = self.lin_mu(new_hidden)
