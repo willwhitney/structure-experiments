@@ -117,6 +117,7 @@ mean_grad_norm = 0
 z_var_means = []
 z_var_min = 1e6
 z_var_max = -1e6
+last_covariance = 0
 
 progress = progressbar.ProgressBar(max_value=opt.print_every)
 while i < opt.max_steps:
@@ -235,11 +236,12 @@ while i < opt.max_steps:
             torch.save(save_dict, opt.save + '/model.t7')
 
         if opt.seq_len > 1:
-            if i == opt.max_steps or (i % 500000 == 0 and i > 0):
+            if i == opt.max_steps or i - last_covariance > 1e7:
                 construct_covariance(opt.save, model, train_loader, 2000,
                                      label="train_" + str(i))
                 construct_covariance(opt.save, model, test_loader, 2000,
                                      label="test_" + str(i))
+                last_covariance = i
 
         # learning rate decay
         # 0.985 every 320K -> ~0.2 at 1,000,000 steps

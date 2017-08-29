@@ -61,7 +61,7 @@ def construct_covariance(savedir, model, loader, n, label=""):
             if t < len(x) - 1:
                 cat_prior = model.predict_latent(z_sample)
                 inferred_z_post = model.inference(x[t+1],
-                                                  cat_prior[0])
+                                                  cat_prior)
         zs.append(seq_zs)
 
     paired_zs = []
