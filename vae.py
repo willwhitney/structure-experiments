@@ -276,47 +276,6 @@ class TinyDCGANGenerator(nn.Module):
         sigma = Variable(torch.ones(mu.size()).type(dtype) * 0.5)
         return (mu, sigma)
 
-class VAE(nn.Module):
-    def __init__(self):
-        super(VAE, self).__init__()
-
-        self.fc1 = nn.Linear(784, 400)
-        self.fc21 = nn.Linear(400, 20)
-        self.fc22 = nn.Linear(400, 20)
-        self.fc3 = nn.Linear(20, 400)
-        self.fc41 = nn.Linear(400, 784)
-        self.fc42 = nn.Linear(400, 784)
-
-        self.encoder = TinyDCGANFirstInference([1, 28, 28], 20)
-        self.decoder = TinyDCGANGenerator(20, [1, 28, 28])
-
-        self.relu = nn.ReLU()
-        self.sigmoid = nn.Sigmoid()
-
-    def encode(self, x):
-        mu, sigma = self.encoder(x)
-        return mu, sigma
-
-    def reparametrize(self, mu, logvar):
-        std = logvar.mul(0.5).exp_()
-        if args.cuda:
-            eps = torch.cuda.FloatTensor(std.size()).normal_()
-        else:
-            eps = torch.FloatTensor(std.size()).normal_()
-        eps = Variable(eps)
-        return eps.mul(std).add_(mu)
-
-    def decode(self, z):
-        mu, sigma = self.decoder(z)
-        return self.sigmoid(mu), sigma
-
-    def forward(self, x):
-        mu, logvar = self.encode(x)
-        # z = self.reparametrize(mu, logvar)
-        z = sample_log2((mu, logvar))
-        xhat = self.decode(z)
-        return xhat, mu, logvar
-
 # class VAE(nn.Module):
 #     def __init__(self):
 #         super(VAE, self).__init__()
@@ -328,13 +287,15 @@ class VAE(nn.Module):
 #         self.fc41 = nn.Linear(400, 784)
 #         self.fc42 = nn.Linear(400, 784)
 
+#         self.encoder = TinyDCGANFirstInference([1, 28, 28], 20)
+#         self.decoder = TinyDCGANGenerator(20, [1, 28, 28])
+
 #         self.relu = nn.ReLU()
 #         self.sigmoid = nn.Sigmoid()
 
 #     def encode(self, x):
-#         h1 = self.relu(self.fc1(x))
-#         # return self.fc21(h1), self.sigmoid(self.fc22(h1)) * 4
-#         return self.fc21(h1), self.fc22(h1)
+#         mu, sigma = self.encoder(x)
+#         return mu, sigma
 
 #     def reparametrize(self, mu, logvar):
 #         std = logvar.mul(0.5).exp_()
@@ -346,15 +307,54 @@ class VAE(nn.Module):
 #         return eps.mul(std).add_(mu)
 
 #     def decode(self, z):
-#         h3 = self.relu(self.fc3(z))
-#         return self.sigmoid(self.fc41(h3)), self.fc42(h3)
+#         mu, sigma = self.decoder(z)
+#         return self.sigmoid(mu), sigma
 
 #     def forward(self, x):
-#         mu, logvar = self.encode(x.view(-1, 784))
+#         mu, logvar = self.encode(x)
 #         # z = self.reparametrize(mu, logvar)
 #         z = sample_log2((mu, logvar))
 #         xhat = self.decode(z)
 #         return xhat, mu, logvar
+
+class VAE(nn.Module):
+    def __init__(self):
+        super(VAE, self).__init__()
+
+        self.fc1 = nn.Linear(784, 400)
+        self.fc21 = nn.Linear(400, 20)
+        self.fc22 = nn.Linear(400, 20)
+        self.fc3 = nn.Linear(20, 400)
+        self.fc41 = nn.Linear(400, 784)
+        self.fc42 = nn.Linear(400, 784)
+
+        self.relu = nn.ReLU()
+        self.sigmoid = nn.Sigmoid()
+
+    def encode(self, x):
+        h1 = self.relu(self.fc1(x))
+        # return self.fc21(h1), self.sigmoid(self.fc22(h1)) * 4
+        return self.fc21(h1), self.fc22(h1)
+
+    def reparametrize(self, mu, logvar):
+        std = logvar.mul(0.5).exp_()
+        if args.cuda:
+            eps = torch.cuda.FloatTensor(std.size()).normal_()
+        else:
+            eps = torch.FloatTensor(std.size()).normal_()
+        eps = Variable(eps)
+        return eps.mul(std).add_(mu)
+
+    def decode(self, z):
+        h3 = self.relu(self.fc3(z))
+        return self.sigmoid(self.fc41(h3)), self.fc42(h3)
+
+    def forward(self, x):
+        mu, logvar = self.encode(x.view(-1, 784))
+        # z = self.reparametrize(mu, logvar)
+        z = sample_log2((mu, logvar))
+        xhat = self.decode(z)
+        return xhat, mu, logvar
 
 # class GaussianKLD(nn.Module):
 #     def forward(self, q, p):

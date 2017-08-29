@@ -8,6 +8,9 @@ import shutil
 
 from torchvision import datasets, transforms
 from util import *
+from atari_dataset import AtariData
+from video_dataset import *
+from env import *
 
 hostname = socket.gethostname()
 
@@ -79,8 +82,12 @@ def load_dataset(opt):
             data_path = '/misc/vlgscratch3/FergusGroup/wwhitney/' + opt.data
             # data_path = '/misc/vlgscratch3/FergusGroup/wwhitney/urban/5th_ave'
 
+        if opt.data == 'sample':
+            train_data, test_data = make_split_datasets(
+                '.', 5, 4, image_width=opt.image_width, chunk_length=50)
+            load_workers = 0
         # 'urban' datasets are in-memory stores
-        if data_path.find('urban') >= 0:
+        elif data_path.find('urban') >= 0:
             if not data_path[-3:] == '.t7':
                 data_path = data_path + '/dataset.t7'
 
@@ -88,6 +95,14 @@ def load_dataset(opt):
             data_checkpoint = torch.load(data_path)
             train_data = data_checkpoint['train_data']
             test_data = data_checkpoint['test_data']
+
+            if train_data.image_size[1] != opt.image_width:
+                train_data.resize_([train_data.image_size[0], 
+                                    opt.image_width,
+                                    opt.image_width])
+                test_data.resize_([test_data.image_size[0], 
+                                   opt.image_width,
+                                   opt.image_width])
 
             train_data.seq_len = opt.seq_len
             test_data.seq_len = opt.seq_len

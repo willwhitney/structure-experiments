@@ -136,9 +136,11 @@ class IndependentModel(nn.Module):
         self.img_size = img_size
         self.hidden_dim = hidden_dim
 
+        # the second term is zeros because we're using log(sigma^2)
+        # log(1^2) == 0
         single_z1 = (
             Variable(torch.zeros(opt.batch_size, self.hidden_dim).type(dtype)),
-            Variable(torch.ones(opt.batch_size, self.hidden_dim).type(dtype))
+            Variable(torch.zeros(opt.batch_size, self.hidden_dim).type(dtype))
         )
         self.z1_prior = (
             torch.cat([single_z1[0] for _ in range(n_latents)], 1),
