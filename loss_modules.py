@@ -83,18 +83,15 @@ class LogSquaredGaussianKLD(nn.Module):
         # d = torch.log(torch.prod(sigma_p) / torch.prod(sigma_q))
         # d = torch.log(torch.prod(sigma_p, 1, keepdim=True) / 
                       # torch.prod(sigma_q, 1, keepdim=True))
-        # d = torch.log(torch.exp(torch.sum(log_sigma_p2, 1, keepdim=True))) - \
-        #     torch.log(torch.exp(torch.sum(log_sigma_q2, 1, keepdim=True)))
-        d = torch.sum(log_sigma_p2, 1, keepdim=True) - \
-            torch.sum(log_sigma_q2, 1, keepdim=True)
+        d = torch.log(torch.exp(torch.sum(log_sigma_p2, 1, keepdim=True))) - \
+            torch.log(torch.exp(torch.sum(log_sigma_q2, 1, keepdim=True)))
 
         divergences = 0.5 * (a + b + c + d)
-        mean = divergences.mean()
-        if math.isnan(mean.data[0]) or math.isinf(mean.data[0]):
+        if math.isnan(divergences.data.sum()):
             pdb.set_trace()
 
         # pdb.set_trace()
-        return mean
+        return divergences.mean()
 
 class GaussianLL(nn.Module):
     def forward(self, p, target):

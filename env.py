@@ -7,6 +7,9 @@ import numpy as np
 
 from PIL import Image
 
+
+from params import *
+
 class Thing:
     def __init__(self, color, loc, vel):
         self.color = color
