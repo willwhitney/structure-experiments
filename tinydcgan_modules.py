@@ -152,7 +152,7 @@ class TinyDCGANInference(nn.Module):
 
         joined = torch.cat([current, *prior], 1)
         new_hidden = activation(self.joint_lin(joined))
-        new_hidden = activation(self.merged_lin(new_hidden))
+        new_hidden = activation(self.merged_lin(joined))
 
         # mu = 10 * F.tanh(self.lin_mu(new_hidden) / 10)
         mu = self.lin_mu(new_hidden)
