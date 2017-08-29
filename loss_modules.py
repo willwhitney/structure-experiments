@@ -87,11 +87,12 @@ class LogSquaredGaussianKLD(nn.Module):
             torch.log(torch.exp(torch.sum(log_sigma_q2, 1, keepdim=True)))
 
         divergences = 0.5 * (a + b + c + d)
-        if math.isnan(divergences.data.sum()):
+        mean = divergences.mean()
+        if math.isnan(mean.data[0]) or math.isinf(mean.data[0]):
             pdb.set_trace()
 
         # pdb.set_trace()
-        return divergences.mean()
+        return mean
 
 class GaussianLL(nn.Module):
     def forward(self, p, target):
