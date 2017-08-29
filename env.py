@@ -40,6 +40,7 @@ class DataGenerator:
         self.image_size = [3, self.size, self.size]
         self.n_things = balls
         self.max_speed = 1
+        self.thing_size = 2
 
         self.colors = colors
         # 'vary'
@@ -51,15 +52,15 @@ class DataGenerator:
             color = random_color()
         return Thing(
             color = color,
-            loc = [random.randint(0, self.size - 1),
-                  random.randint(0, self.size - 1)],
+            loc = [random.randint(0, self.size - self.thing_size),
+                  random.randint(0, self.size - self.thing_size)],
             vel = [random.randint(-self.max_speed, self.max_speed),
                   random.randint(-self.max_speed, self.max_speed)]
         )
 
     def bounce(self, thing):
         for index in range(len(thing.loc)):
-            if thing.loc[index] >= self.size:
+            if thing.loc[index] + (self.thing_size - 1) >= self.size:
                 thing.vel[index] = - thing.vel[index]
                 thing.loc[index] = 2 * self.size - 2 - thing.loc[index]
             if thing.loc[index] < 0:
@@ -100,8 +101,12 @@ class DataGenerator:
 
     def render(self):
         canvas = torch.zeros(*self.image_size)
+        pdb.set_trace()
         for thing in self.things:
-            canvas[:, thing.loc[0], thing.loc[1]] = torch.Tensor(thing.color)
+            canvas[:, 
+                   thing.loc[0] : thing.loc[0] + self.thing_size, 
+                   thing.loc[1] : thing.loc[1] + self.thing_size, 
+                  ] = torch.Tensor(thing.color)
         return canvas
 
 class HorizontalLinesGenerator(DataGenerator):
@@ -125,7 +130,7 @@ class HorizontalLinesGenerator(DataGenerator):
             thing = Thing(
                 color=colors[i],
                 loc=[i * math.floor(self.size / self.n_things),
-                     random.randint(0, self.size - 1)],
+                     random.randint(0, self.size - self.thing_size)],
                 vel=[0,
                      random.randint(-self.max_speed, self.max_speed)])
             self.things.append(thing)
