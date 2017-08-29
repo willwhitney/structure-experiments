@@ -1,11 +1,3 @@
-# import sys, warnings, traceback, torch
-# def warn_with_traceback(message, category, filename, lineno, file=None, line=None):
-#     sys.stderr.write(warnings.formatwarning(message, category, filename, lineno, line))
-#     traceback.print_stack(sys._getframe(2))
-# warnings.showwarning = warn_with_traceback; warnings.simplefilter('always', UserWarning);
-# torch.utils.backcompat.broadcast_warning.enabled = True
-# torch.utils.backcompat.keepdim_warning.enabled = True
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -28,12 +20,10 @@ from util import *
 
 from modules import *
 from models import *
-from env import *
 from params import *
 from setup import *
 from generations import *
-from atari_dataset import AtariData
-from video_dataset import *
+
 from covariance import construct_covariance
 
 print("Tensor type: ", dtype)
@@ -138,7 +128,14 @@ while i < opt.max_steps:
         if opt.data == 'mnist':
             sequence = [sequence[0]]
         else:
-           sequence.transpose_(0, 1)
+            sequence.transpose_(0, 1)
+            # resized_sequence = []
+            # for frame_batch in sequence:
+            #     for frame in frame_batch:
+
+
+
+
         sequence = sequence_input(list(sequence), dtype)
 
         generations, nll, divergences, batch_z_vars = model(sequence,
@@ -209,7 +206,7 @@ while i < opt.max_steps:
                    "Divergence: {:10.3f}, "
                    "Prior divergence: {:10.3f}, "
                    "Trans divergence: {:10.3f}, "
-                   "Z vars: [{:10.3f}, {:10.3f}, {:10.3f}], "
+                   "Z vars: [{:6.3f}, {:6.3f}, {:6.3f}], "
                    "Grad norm: {:10.3f}, "
                    "ms/seq: {:6.2f}").format(*print_values[:-1]))
 
