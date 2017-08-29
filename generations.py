@@ -88,7 +88,7 @@ def save_ml(path, model, priming):
 def save_z1_samples(path, model):
     # save samples from the first-frame prior
     if not isinstance(model, MSEModel):
-        prior_sample = sample(model.z1_prior)
+        prior_sample = sample_log2(model.z1_prior)
         image_dist = model.generator(prior_sample)
         image_sample = image_dist[0] #.resize(32, 3, image_width, image_width)
         image_sample = [[image] for image in image_sample]

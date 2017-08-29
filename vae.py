@@ -587,7 +587,7 @@ class VAE(nn.Module):
 #         log_likelihoods = -0.5 * (a + b + c)
 #         return log_likelihoods.mean()
 
-from loss_modules import LogSquaredGaussianKLD, GaussianLL
+from loss_modules import LogSquaredGaussianKLD, GaussianLL, LogSquaredGaussianLL
 
 model = VAE()
 if args.cuda:
@@ -599,6 +599,7 @@ if args.cuda:
 logsquaredgaussianKL = LogSquaredGaussianKLD()
 
 gaussianLL = GaussianLL()
+logsquaredLL = LogSquaredGaussianLL()
 # othergaussianLL = OtherGaussianLL()
 # originalgaussianLL = OriginalGaussianLL()
 # logsquaredLL = LogSquaredGaussianLL()
@@ -646,11 +647,12 @@ def gaussianLL_loss_function(xhat, x, mu, logvar):
                       requires_grad=False).type_as(x)
     # pdb.set_trace()
     log_squared_outvar = Variable(
-        torch.Tensor(xhat[0].size()).fill_(math.log(0.5**2)), 
+        torch.Tensor(xhat[0].size()).fill_(math.log(0.1**2)), 
         requires_grad=False).type_as(x)
 
+    output_NLL = - logsquaredLL(xhat, x)
     # output_NLL = - logsquaredLL((xhat[0], log_squared_outvar), x)
-    output_NLL = - gaussianLL((xhat[0], outvar), x)
+    # output_NLL = - gaussianLL((xhat[0], outvar), x)
 
     # output_NLL = - gaussianLL((xhat[0], log_outvar), x)
     # output_NLL = - gaussianLL(xhat, x)

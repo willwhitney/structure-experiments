@@ -238,9 +238,9 @@ class IndependentModel(nn.Module):
                 # give it the sample from z_{t-1}
                 # inferred_z_post = self.inference(reshaped_sequence[t+1], z_sample)
 
-                # give it the mean of the prior p(z_t | z_{t-1})
+                # give it the mean and logvar2 of the prior p(z_t | z_{t-1})
                 inferred_z_post = self.inference(reshaped_sequence[t+1],
-                                                 cat_prior[0])
+                                                 cat_prior)
                 # z_var_mean += cat_prior[1].mean().data[0]
                 # z_var_min = min(z_var_min, cat_prior[1].data.min())
                 # z_var_max = max(z_var_max, cat_prior[1].data.max())

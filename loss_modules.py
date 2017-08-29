@@ -145,6 +145,10 @@ class LogSquaredGaussianLL(nn.Module):
         log_sigma2 = batch_flatten(log_sigma2)
         target = batch_flatten(target)
 
+        # log_sigma2 = torch.clamp(log_sigma2, min=-10.596634733)
+        # log_sigma2 = torch.clamp(log_sigma2, min=-4.605170186)
+        # log_sigma2 = torch.clamp(log_sigma2, min=-1.386294361)
+
         a = torch.sum(0.5 * log_sigma2, 1, keepdim=True)
         diff = (target - mu)
         b = torch.sum(
@@ -152,4 +156,8 @@ class LogSquaredGaussianLL(nn.Module):
 
         c = mu.size(1) * math.log(2*math.pi)
         log_likelihoods = -0.5 * (a + b + c)
+        mean = log_likelihoods.mean()
+        if math.isnan(mean.data[0]) or math.isinf(mean.data[0]):
+            pdb.set_trace()
+
         return log_likelihoods.mean()

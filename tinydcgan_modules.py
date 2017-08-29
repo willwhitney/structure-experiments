@@ -131,7 +131,8 @@ class TinyDCGANInference(nn.Module):
         # self.conv1 = nn.Conv2d(input_dims[0], 32, 3)
 
         self.input_lin = nn.Linear(prod(self.out_dims[-1]), hidden_dim)
-        self.joint_lin = nn.Linear(hidden_dim * 2, hidden_dim)
+        self.joint_lin = nn.Linear(hidden_dim * 3, hidden_dim)
+        self.merged_lin = nn.Linear(hidden_dim, hidden_dim)
         # self.layers = nn.ModuleList([nn.Linear(hidden_dim, hidden_dim)
         #                              for _ in range(2)])
 
@@ -140,7 +141,7 @@ class TinyDCGANInference(nn.Module):
         self.lin_sigma = nn.Linear(hidden_dim, self.hidden_dim)
 
 
-    def forward(self, x_t, z_prev):
+    def forward(self, x_t, prior):
         current = x_t
         for conv in self.convs:
             current = conv(current)
@@ -149,8 +150,9 @@ class TinyDCGANInference(nn.Module):
         current = self.input_lin(current)
         current = activation(current)
 
-        joined = torch.cat([current, z_prev], 1)
+        joined = torch.cat([current, *prior], 1)
         new_hidden = activation(self.joint_lin(joined))
+        new_hidden = activation(self.merged_lin(joined))
 
         # mu = 10 * F.tanh(self.lin_mu(new_hidden) / 10)
         mu = self.lin_mu(new_hidden)
