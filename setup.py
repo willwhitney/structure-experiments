@@ -131,6 +131,13 @@ def load_dataset(opt):
                 opt.seq_len, opt.balls, opt.colors, opt.image_width)
             load_workers = 0
 
+        elif opt.data == 'random_balls':
+            train_data = RandomizeBounceData(
+                opt.seq_len, opt.balls, opt.colors, opt.image_width)
+            test_data = RandomizeBounceData(
+                opt.seq_len, opt.balls, opt.colors, opt.image_width)
+            load_workers = 0
+
         elif opt.data == 'mnist':
             train_data = datasets.MNIST('../data', train=True, download=True,
                 transform=transforms.Compose([
@@ -145,10 +152,12 @@ def load_dataset(opt):
         elif opt.data == 'moving-mnist':
             train_data = MovingMNIST(train=True, 
                                      seq_len=opt.seq_len,
-                                     image_size=opt.image_width)
+                                     image_size=opt.image_width,
+                                     colored=(opt.channels == 3))
             test_data = MovingMNIST(train=False, 
                                      seq_len=opt.seq_len,
-                                     image_size=opt.image_width)
+                                     image_size=opt.image_width,
+                                     colored=(opt.channels == 3))
             load_workers = 1
 
         # other video datasets are big and stored as chunks

@@ -13,6 +13,7 @@ LL = GaussianLL().type(dtype)
 # LL = LogSquaredGaussianLL().type(dtype)
 mse = nn.MSELoss().type(dtype)
 bce = nn.BCELoss().type(dtype)
+bce.size_average = False
 
 class VAEModel(nn.Module):
     def __init__(self, hidden_dim, g_size):
@@ -44,7 +45,8 @@ class VAEModel(nn.Module):
 
         reshaped_sequence = sequence
         if isinstance(self.inference, ConvInference):
-            reshaped_sequence = [x.resize(x.size(0), 3, self.img_size, self.img_size)
+            reshaped_sequence = [x.resize(x.size(0), 
+                                          3, self.img_size, self.img_size)
                                  for x in sequence]
         # reshaped_sequence = [x.resize(x.size(0), self.img_size, self.img_size, 3)
         #                      for x in sequence]
@@ -195,6 +197,8 @@ class IndependentModel(nn.Module):
         z_var_min = 1e6
         z_var_max = -1e6
 
+        prior_variances = []
+
         # if len(sequence) > 1:
         #     diffs = motion_diffs(sequence)
         #     pixel_weights = [diff * motion_weight + 1 for diff in diffs]
@@ -203,6 +207,7 @@ class IndependentModel(nn.Module):
         #     pixel_weights = [ones]
 
         for t in range(len(sequence)):
+
             # give it the sample from z_{t-1}
             # inferred_z_post = self.inference(reshaped_sequence[t+1], z_sample)
 
@@ -224,12 +229,18 @@ class IndependentModel(nn.Module):
             z_var_max = max(z_var_max, inferred_z_post[1].data.max())
 
             z_sample = sample_log2(inferred_z_post)
-
             gen_dist = self.generator(z_sample)
-            # import ipdb; ipdb.set_trace()
-            log_likelihood = LL(gen_dist,
-                                reshaped_sequence[t])
-            # log_likelihood = -bce(F.sigmoid(gen_dist[0]), reshaped_sequence[t])
+
+            if opt.loss == 'normal':
+                log_likelihood = LL(gen_dist,
+                                    reshaped_sequence[t])
+            elif opt.loss == 'bce':
+                # pdb.set_trace()
+                log_likelihood = (-bce(gen_dist[0], reshaped_sequence[t]) / \
+                                  sequence[0].size(0))
+            else:
+                raise Exception('Invalid loss function.')
+
             seq_nll = seq_nll - log_likelihood
             if math.isnan(seq_nll.data.sum()):
                 pdb.set_trace()
@@ -238,6 +249,7 @@ class IndependentModel(nn.Module):
 
             if t < len(sequence) - 1:
                 cat_prior = self.predict_latent(z_sample)
+                prior_variances.append(cat_prior[1])
 
 
                 # z_var_mean += cat_prior[1].mean().data[0]
@@ -248,15 +260,12 @@ class IndependentModel(nn.Module):
         seq_prior_div = seq_prior_div
         if len(sequence) > 1:
             seq_trans_div = seq_trans_div / (len(sequence) - 1)
-        if len(sequence) > 1:
-            z_var_mean = z_var_mean / (len(sequence) - 1)
-        else:
-            z_var_mean = -1
+
         return (generations,
                 # loss / len(sequence),
                 seq_nll / len(sequence),
                 (seq_divergence, seq_prior_div, seq_trans_div), 
-                (z_var_min, z_var_mean, z_var_max))
+                (z_var_min, z_var_mean, z_var_max, prior_variances))
 
     def generate(self, priming, steps, sampling=True):
         priming_steps = len(priming)
@@ -420,7 +429,8 @@ class IndependentModel(nn.Module):
 
             start, end = l * self.hidden_dim, (l+1) * self.hidden_dim
             for t in range(priming_steps, len(sequence)):
-                z[:, start : end].data.copy_(posteriors[t].data[:, start : end])
+                z[:, start : end].data.copy_(
+                        posteriors[t].data[:, start : end])
                 gen_dist = self.generator(z)
                 current_gen.append(gen_dist[0].cpu())
             all_generations.append(current_gen)

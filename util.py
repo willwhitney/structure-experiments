@@ -408,3 +408,16 @@ def conv_transpose_out_dim(in_height, in_width, kernel_size,
         (in_width - 1) * stride - 2 * padding + dilated_kernel)
     return out_height, out_width
 
+def ensure_path_exists(fn):
+    """
+    A decorator which, given a function that has a path as its first argument,
+    ensures that the directory containing that path exists,
+    creating it if necessary.
+    """
+    def wrapper(path, *args, **kwargs):
+        try:
+            fn(path, *args, **kwargs)
+        except FileNotFoundError:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            fn(path, *args, **kwargs)
+    return wrapper

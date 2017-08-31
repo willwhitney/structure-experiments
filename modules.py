@@ -43,12 +43,18 @@ class Transition(nn.Module):
         current = input
         for layer in self.layers:
             current = layer(current)
-            current = F.tanh(current)
+            current = activation(current)
 
         # hidden = F.tanh(self.l1(input))
+        
         mu = self.lin_mu(current)
+        sigma = self.lin_sigma(current)
+        # sigma = self.lin_sigma(current).clamp(min=-4.605170186) # 0.1
+        # sigma = self.lin_sigma(current).clamp(min=-9.210340372) # 0.001
+
+
         # mu = 10 * F.tanh(self.lin_mu(current) / 10)
-        sigma = Variable(torch.ones(mu.size()).type_as(mu.data) / 10)
+        # sigma = Variable(torch.ones(mu.size()).type_as(mu.data) / 10)
         # sigma = F.softplus(self.lin_sigma(current)) + 1e-2
         # print(sigma.mean().data[0])
         return (mu, sigma)

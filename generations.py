@@ -4,15 +4,6 @@ from params import *
 from models import *
 import os
 
-def ensure_path_exists(fn):
-    def wrapper(path, *args, **kwargs):
-        try:
-            fn(path, *args, **kwargs)
-        except FileNotFoundError:
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            fn(path, *args, **kwargs)
-    return wrapper
-
 def save_all_generations(step, model, sequence, generations):
     # volatile input -> no saved intermediate values
     # for x in sequence:

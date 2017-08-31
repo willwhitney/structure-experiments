@@ -13,6 +13,9 @@ class Thing:
         self.color = color
         self.loc = loc
         self.vel = vel
+        self.will_randomize = False
+        self.regular_color = color
+        self.randomize_color = [1, 0, 0]
 
 def normalize_color(c):
     if type(c) == list:
@@ -117,13 +120,50 @@ class DataGenerator:
                 pdb.set_trace()
         return canvas
 
+class RandomizingGenerator(DataGenerator):
+    def step(self):
+        for i, thing in enumerate(self.things):
+            if thing.will_randomize:
+                thing.loc = self.make_thing(thing.color).loc
+                thing.will_randomize = False
+            else:
+                if random.randint(1, 4) == 1:
+                    thing.will_randomize = True
+                thing.loc = [thing.loc[i] + thing.vel[i] for i in range(2)]
+                self.bounce(thing)
+
+            if self.colors == 'vary':
+                self.increment_color(thing)
+        return self
+
+    def render(self):
+        canvas = torch.zeros(*self.image_size)
+        randomizing = False
+        for thing in self.things:
+            if thing.will_randomize:
+                thing_stamp = torch.Tensor(thing.randomize_color)
+                randomizing = True
+            else:
+                thing_stamp = torch.Tensor(thing.color)
+
+            thing_stamp = thing_stamp.unsqueeze(1).unsqueeze(1)
+            thing_stamp = thing_stamp.expand(3, 
+                                             self.thing_size, 
+                                             self.thing_size)
+            try:
+                canvas[:, 
+                       thing.loc[0] : thing.loc[0] + self.thing_size, 
+                       thing.loc[1] : thing.loc[1] + self.thing_size, 
+                      ] = thing_stamp
+            except:
+                pdb.set_trace()
+        return canvas, randomizing
+
 class HorizontalLinesGenerator(DataGenerator):
     def __init__(self, balls, colors, image_width):
         super(HorizontalLinesGenerator, self).__init__(balls,
                                                        colors,
                                                        image_width)
-
-    # def make_thing(self, color):
 
     def start(self):
         if self.colors == 'vary':
@@ -167,6 +207,23 @@ class HorizontalBounceData(BounceData):
         super(HorizontalBounceData, self).__init__(
             seq_len, balls, colors, image_width)
         self.gen = HorizontalLinesGenerator(balls, colors, image_width)
+
+class RandomizeBounceData(BounceData):
+    def __init__(self, seq_len, balls, colors, image_width):
+        super(RandomizeBounceData, self).__init__(
+            seq_len, balls, colors, image_width)
+        self.gen = RandomizingGenerator(balls, colors, image_width)
+
+    def __getitem__(self, i):
+        canvas = torch.zeros(self.seq_len, *self.gen.image_size)
+        self.gen.start()
+        randomizing = []
+        for t in range(self.seq_len):
+            frame, randomized = self.gen.render()
+            canvas[t].copy_(frame)
+            randomizing.append(randomized)
+            self.gen.step()
+        return canvas, randomizing
 
 # gen = DataGenerator()
 # gen.start()

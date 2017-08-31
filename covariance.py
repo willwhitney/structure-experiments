@@ -26,6 +26,7 @@ from video_dataset import *
 
 import sklearn.covariance
 
+@ensure_path_exists
 def construct_covariance(savedir, model, loader, n, label=""):
     data = []
     for i, batch in enumerate(loader):
@@ -49,7 +50,7 @@ def construct_covariance(savedir, model, loader, n, label=""):
         for a in x:
             a.volatile = True
 
-        inferred_z_post = model.first_inference(x[0])
+        inferred_z_post = model.inference(x[0], model.z1_prior)
         cat_prior = model.z1_prior
 
         seq_zs = []

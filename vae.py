@@ -276,65 +276,19 @@ class TinyDCGANGenerator(nn.Module):
         sigma = Variable(torch.ones(mu.size()).type(dtype) * 0.5)
         return (mu, sigma)
 
-# class VAE(nn.Module):
-#     def __init__(self):
-#         super(VAE, self).__init__()
-
-#         self.fc1 = nn.Linear(784, 400)
-#         self.fc21 = nn.Linear(400, 20)
-#         self.fc22 = nn.Linear(400, 20)
-#         self.fc3 = nn.Linear(20, 400)
-#         self.fc41 = nn.Linear(400, 784)
-#         self.fc42 = nn.Linear(400, 784)
-
-#         self.encoder = TinyDCGANFirstInference([1, 28, 28], 20)
-#         self.decoder = TinyDCGANGenerator(20, [1, 28, 28])
-
-#         self.relu = nn.ReLU()
-#         self.sigmoid = nn.Sigmoid()
-
-#     def encode(self, x):
-#         mu, sigma = self.encoder(x)
-#         return mu, sigma
-
-#     def reparametrize(self, mu, logvar):
-#         std = logvar.mul(0.5).exp_()
-#         if args.cuda:
-#             eps = torch.cuda.FloatTensor(std.size()).normal_()
-#         else:
-#             eps = torch.FloatTensor(std.size()).normal_()
-#         eps = Variable(eps)
-#         return eps.mul(std).add_(mu)
-
-#     def decode(self, z):
-#         mu, sigma = self.decoder(z)
-#         return self.sigmoid(mu), sigma
-
-#     def forward(self, x):
-#         mu, logvar = self.encode(x)
-#         # z = self.reparametrize(mu, logvar)
-#         z = sample_log2((mu, logvar))
-#         xhat = self.decode(z)
-#         return xhat, mu, logvar
-
 class VAE(nn.Module):
     def __init__(self):
         super(VAE, self).__init__()
 
-        self.fc1 = nn.Linear(784, 400)
-        self.fc21 = nn.Linear(400, 20)
-        self.fc22 = nn.Linear(400, 20)
-        self.fc3 = nn.Linear(20, 400)
-        self.fc41 = nn.Linear(400, 784)
-        self.fc42 = nn.Linear(400, 784)
+        self.encoder = TinyDCGANFirstInference([1, 28, 28], 20)
+        self.decoder = TinyDCGANGenerator(20, [1, 28, 28])
 
         self.relu = nn.ReLU()
         self.sigmoid = nn.Sigmoid()
 
     def encode(self, x):
-        h1 = self.relu(self.fc1(x))
-        # return self.fc21(h1), self.sigmoid(self.fc22(h1)) * 4
-        return self.fc21(h1), self.fc22(h1)
+        mu, sigma = self.encoder(x)
+        return mu, sigma
 
     def reparametrize(self, mu, logvar):
         std = logvar.mul(0.5).exp_()
@@ -346,15 +300,54 @@ class VAE(nn.Module):
         return eps.mul(std).add_(mu)
 
     def decode(self, z):
-        h3 = self.relu(self.fc3(z))
-        return self.sigmoid(self.fc41(h3)), self.fc42(h3)
+        mu, sigma = self.decoder(z)
+        return self.sigmoid(mu), sigma
 
     def forward(self, x):
-        mu, logvar = self.encode(x.view(-1, 784))
+        mu, logvar = self.encode(x)
         # z = self.reparametrize(mu, logvar)
         z = sample_log2((mu, logvar))
         xhat = self.decode(z)
         return xhat, mu, logvar
+
+# class VAE(nn.Module):
+#     def __init__(self):
+#         super(VAE, self).__init__()
+
+#         self.fc1 = nn.Linear(784, 400)
+#         self.fc21 = nn.Linear(400, 20)
+#         self.fc22 = nn.Linear(400, 20)
+#         self.fc3 = nn.Linear(20, 400)
+#         self.fc41 = nn.Linear(400, 784)
+#         self.fc42 = nn.Linear(400, 784)
+
+#         self.relu = nn.ReLU()
+#         self.sigmoid = nn.Sigmoid()
+
+#     def encode(self, x):
+#         h1 = self.relu(self.fc1(x))
+#         # return self.fc21(h1), self.sigmoid(self.fc22(h1)) * 4
+#         return self.fc21(h1), self.fc22(h1)
+
+#     def reparametrize(self, mu, logvar):
+#         std = logvar.mul(0.5).exp_()
+#         if args.cuda:
+#             eps = torch.cuda.FloatTensor(std.size()).normal_()
+#         else:
+#             eps = torch.FloatTensor(std.size()).normal_()
+#         eps = Variable(eps)
+#         return eps.mul(std).add_(mu)
+
+#     def decode(self, z):
+#         h3 = self.relu(self.fc3(z))
+#         return self.sigmoid(self.fc41(h3)), self.fc42(h3)
+
+#     def forward(self, x):
+#         mu, logvar = self.encode(x.view(-1, 784))
+#         # z = self.reparametrize(mu, logvar)
+#         z = sample_log2((mu, logvar))
+#         xhat = self.decode(z)
+#         return xhat, mu, logvar
 
 # class GaussianKLD(nn.Module):
 #     def forward(self, q, p):
@@ -607,17 +600,17 @@ logsquaredLL = LogSquaredGaussianLL()
 reconstruction_function = nn.BCELoss()
 reconstruction_function.size_average = False
 
-# def loss_function(recon_x, x, mu, logvar):
-#     BCE = reconstruction_function(recon_x, x)
+def original_loss_function(xhat, x, mu, logvar):
+    BCE = reconstruction_function(xhat[0], x)
 
-#     # see Appendix B from VAE paper:
-#     # Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
-#     # https://arxiv.org/abs/1312.6114
-#     # 0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
-#     KLD_element = mu.pow(2).add_(logvar.exp()).mul_(-1).add_(1).add_(logvar)
-#     KLD = torch.sum(KLD_element).mul_(-0.5)
+    # see Appendix B from VAE paper:
+    # Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
+    # https://arxiv.org/abs/1312.6114
+    # 0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
+    KLD_element = mu.pow(2).add_(logvar.exp()).mul_(-1).add_(1).add_(logvar)
+    KLD = torch.sum(KLD_element).mul_(-0.5)
 
-#     return BCE + KLD, KLD, BCE
+    return BCE + KLD, KLD, BCE
 
 def gaussianKL_loss_function(xhat, x, mu, logvar):
     # -2.3 is log(0.1)
@@ -650,7 +643,11 @@ def gaussianLL_loss_function(xhat, x, mu, logvar):
         torch.Tensor(xhat[0].size()).fill_(math.log(0.1**2)), 
         requires_grad=False).type_as(x)
 
-    output_NLL = - logsquaredLL(xhat, x)
+    # output_NLL = - logsquaredLL(xhat, x)
+
+    # pdb.set_trace()
+    output_NLL = reconstruction_function(xhat[0], x) / args.batch_size
+
     # output_NLL = - logsquaredLL((xhat[0], log_squared_outvar), x)
     # output_NLL = - gaussianLL((xhat[0], outvar), x)
 
@@ -672,7 +669,7 @@ def gaussianLL_loss_function(xhat, x, mu, logvar):
     # KLD = gaussianKL((mu, torch.exp(logvar)), (zeros, ones))
     # KLD = squaredgaussianKL((mu, torch.exp(logvar)), (zeros, ones))
     # KLD = fixedgaussianKL((mu, torch.exp(0.5 * logvar)), (zeros, ones))
-    KLD = logsquaredgaussianKL((mu, logvar), (zeros, zeros2))
+    KLD = logsquaredgaussianKL((mu, logvar), (zeros, zeros2)) # * args.batch_size
     # KLD = gaussianKL((mu, logvar), (zeros, ones))
 
     return output_NLL + KLD, KLD, output_NLL

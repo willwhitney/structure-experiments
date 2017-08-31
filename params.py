@@ -30,7 +30,11 @@ parser.set_defaults(git=True)
 
 parser.add_argument('--kl-anneal', dest='kl_anneal', action='store_true')
 parser.add_argument('--no-kl-anneal', dest='kl_anneal', action='store_false')
-parser.set_defaults(kl_anneal=True)
+parser.set_defaults(kl_anneal=False)
+
+parser.add_argument('--sgld', dest='sgld', action='store_true')
+parser.add_argument('--no-sgld', dest='sgld', action='store_false')
+parser.set_defaults(sgld=False)
 
 parser.add_argument('--load', default=None)
 parser.add_argument('--use-loaded-opt', action="store_true")
@@ -39,6 +43,8 @@ parser.add_argument('--resume', action="store_true")
 parser.add_argument('--print-every', default=200000, type=int)
 parser.add_argument('--max-steps', default=5e8, type=int)
 parser.add_argument('--seed', default=0, type=int)
+
+parser.add_argument('--loss', default='normal')
 
 parser.add_argument('--data', default='urban/5th_ave')
 parser.add_argument('--batch-size', default=100, type=int)
@@ -49,8 +55,7 @@ parser.add_argument('--motion-weight', default=0, type=int)
 
 parser.add_argument('--lr', default=3e-4, type=float)
 parser.add_argument('--no-lr_decay', action="store_true")
-parser.add_argument('--no-sgld', action="store_true")
-parser.add_argument('--activation', default="tanh")
+parser.add_argument('--activation', default="selu")
 parser.add_argument('--kl-anneal-end', default=3e6, type=float)
 parser.add_argument('--kl-weight', default=1, type=int)
 parser.add_argument('--output-var', default=0.01, type=float)
