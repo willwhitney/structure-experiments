@@ -24,6 +24,7 @@ from models import *
 from params import *
 from setup import *
 from generations import *
+from bookkeeper import Bookkeeper
 
 from covariance import construct_covariance
 
@@ -72,7 +73,7 @@ logging.basicConfig(filename = opt.save + "/results.csv",
 logging.debug(("step,loss,nll,divergence,prior divergence,trans divergence,"
                "qvarmin,qvarmean,qvarmax,"
                "pvarmin,pvarmean,pvarmax,"
-               "grad norm,ms/seq,lr"))
+               "ms/seq,lr"))
 
 # --------- load a dataset ------------------------------------
 train_data, test_data, load_workers = load_dataset(opt)
@@ -93,72 +94,30 @@ print("Number of training sequences (with overlap): " + str(len(train_data)))
 print("Number of testing sequences (with overlap): " + str(len(test_data)))
 # ------------------------------------
 
-KL = GaussianKLD().type(dtype)
-LL = GaussianLL().type(dtype)
-mse = nn.MSELoss().type(dtype)
-l1 = nn.L1Loss().type(dtype)
 
 optimizer = optim.Adam(
     model.parameters(),
     lr=opt.lr)
 
-sequence = None
-if opt.sanity:
-    opt.max_steps = 10 * opt.batch_size
-    opt.print_every = 10 * opt.batch_size
-
 # make opt.print_every a multiple of batch_size
 opt.print_every = (opt.print_every // opt.batch_size) * opt.batch_size
-
-# initialize statistics
-mean_loss = 0
-mean_divergence = 0
-mean_nll = 0
-mean_prior_div = 0
-mean_trans_div = 0
-mean_grad_norm = 0
-q_var_means = []
-q_var_min = 100
-q_var_max = -100
-
-p_var_means = []
-p_var_min = 100
-p_var_max = -100
-last_covariance = 0
+bookkeeper = Bookkeeper(i)
 
 random_mean_vars = []
 norandom_mean_vars = []
 
-progress = progressbar.ProgressBar(max_value=opt.print_every)
 while i < opt.max_steps:
     for sequence in train_loader:
         i += opt.batch_size
-        # pdb.set_trace()
 
         sequence = normalize_data(opt, dtype, sequence)
-
-        generations, nll, divergences, batch_z_vars = model(sequence,
-                                              motion_weight=opt.motion_weight)
-        seq_divergence, seq_prior_div, seq_trans_div = divergences
-        mean_divergence += seq_divergence.data[0]
-        mean_prior_div += seq_prior_div.data[0]
-        mean_trans_div += seq_trans_div.data[0]
-        mean_nll += nll.data[0]
-
-        p_vars, q_vars = batch_z_vars
-
-        q_var_means.append(sum([v.data.mean() for v in q_vars]) / \
-                               len(q_vars))
-        q_var_min = min(*[v.data.min() for v in q_vars], q_var_min)
-        q_var_max = max(*[v.data.max() for v in q_vars], q_var_max)
-
-        if opt.seq_len > 1:
-            p_var_means.append(sum([v.data.mean() for v in p_vars]) / \
-                               len(p_vars))
-            p_var_min = min(*[v.data.min() for v in p_vars], p_var_min)
-            p_var_max = max(*[v.data.max() for v in p_vars], p_var_max)
-
         # pdb.set_trace()
+
+        outputs = model(sequence, motion_weight=opt.motion_weight)
+        bookkeeper.update(i, model, sequence, *outputs)
+
+        _, nll, divergences, *_ = outputs
+        seq_divergence, seq_prior_div, seq_trans_div = divergences
 
         # accumulate the variances for randomizing and nonrandomizing frames
         if opt.data == 'random_balls':
@@ -170,21 +129,16 @@ while i < opt.max_steps:
                     else:
                         norandom_mean_vars.append(mean)
 
-
+        # scale the KL however appropriate
         kl_penalty = seq_divergence * opt.kl_weight
         if opt.kl_anneal:
             kl_weight = max(0, min(i / opt.kl_anneal_end, 1))
             kl_penalty = kl_weight * kl_penalty
 
         loss = nll + kl_penalty
-        mean_loss += loss.data[0]
 
         model.zero_grad()
         loss.backward()
-
-        # torch.nn.utils.clip_grad_norm(model.parameters(), )
-
-        mean_grad_norm += grad_norm(model)
 
         if opt.sgld:
             for p in model.parameters():
@@ -192,103 +146,13 @@ while i < opt.max_steps:
                     p.grad.data += p.grad.data.clone().normal_(0, opt.lr)
         optimizer.step()
 
-        progress.update(i % opt.print_every)
-        is_update_time = (i >= opt.max_steps or
-                          (i % opt.print_every == 0 and i > 0))
-        if is_update_time:
-            progress.finish()
-            clear_progressbar()
-
-            if opt.data == 'random_balls':
-                print("Variance on randomizing frames: {}".format(
-                        sum(random_mean_vars) / len(random_mean_vars)))
-                print("Variance on non-randomizing frames: {}".format(
-                        sum(norandom_mean_vars) / len(norandom_mean_vars)))
-                random_mean_vars = []
-                norandom_mean_vars = []
-
-
-
-            elapsed_time = progress.end_time - progress.start_time
-            elapsed_seconds = elapsed_time.total_seconds()
-
-            batches = opt.print_every / opt.batch_size
-            if opt.seq_len > 1:
-                p_var_mean = sum(p_var_means) / len(p_var_means)
-            else:
-                p_var_mean = 0
-            q_var_mean = sum(q_var_means) / len(q_var_means)
-            log_values = (i,
-                          mean_loss / batches,
-                          mean_nll / batches,
-                          mean_divergence / batches,
-                          mean_prior_div / batches,
-                          mean_trans_div / batches,
-                          q_var_min, 
-                          q_var_mean,
-                          q_var_max,
-                          p_var_min, 
-                          p_var_mean,
-                          p_var_max,
-                          mean_grad_norm / batches,
-                          elapsed_seconds / opt.print_every * 1000,
-                          opt.lr)
-            # log_values = (i,
-            #               mean_loss / batches,
-            #               mean_nll / batches,
-            #               mean_divergence / batches,
-            #               mean_prior_div / batches,
-            #               mean_trans_div / batches,
-            #               mean_grad_norm / batches,
-            #               elapsed_seconds / opt.print_every * 1000,
-            #               opt.lr)
-            print(("Step: {:8d}, Loss: {:8.3f}, NLL: {:8.3f}, "
-                   "Divergence: {:8.3f}, "
-                   "Prior divergence: {:8.3f}, "
-                   "Trans divergence: {:8.3f}, "
-                   "q(z) vars: [{:7.3f}, {:7.3f}, {:7.3f}], "
-                   "p(z) vars: [{:7.3f}, {:7.3f}, {:7.3f}], "
-                   "Grad norm: {:10.3f}, "
-                   "ms/seq: {:6.2f}").format(*log_values[:-1]))
-
-            # make list of n copies of format string, then format
-            format_string = ",".join(["{:.8e}"]*len(log_values))
-            logging.debug(format_string.format(*log_values))
-
-            mean_loss = 0
-            mean_divergence = 0
-            mean_prior_div = 0
-            mean_trans_div = 0
-            mean_grad_norm = 0
-            mean_nll = 0
-            q_var_means = []
-            q_var_min = 100
-            q_var_max = -100
-            p_var_means = []
-            p_var_min = 100
-            p_var_max = -100
-            try:
-                save_all_generations(i, model, sequence, generations)
-            except:
-                traceback.print_exc()
-
-        if i >= opt.max_steps or (i % opt.save_every == 0 and i > 0):
-            save_dict = {
-                    'model': model,
-                    'opt': vars(opt),
-                    'i': i,
-                }
-            torch.save(save_dict, opt.save + '/model.t7')
-
-        if opt.seq_len > 1:
-            if i == opt.max_steps or i - last_covariance > opt.cov_every:
-                construct_covariance(opt.save + '/covariance/', 
-                                     model, train_loader, 2000,
-                                     label="train_" + str(i))
-                construct_covariance(opt.save + '/covariance/',
-                                     model, test_loader, 2000,
-                                     label="test_" + str(i))
-                last_covariance = i
+        if opt.data == 'random_balls' and i % opt.print_every == 0 and i > 0:
+            print("Variance on randomizing frames: {}".format(
+                    sum(random_mean_vars) / len(random_mean_vars)))
+            print("Variance on non-randomizing frames: {}".format(
+                    sum(norandom_mean_vars) / len(norandom_mean_vars)))
+            random_mean_vars = []
+            norandom_mean_vars = []
 
         # learning rate decay
         # 0.985 every 320K -> ~0.2 at 1,000,000 steps
@@ -296,9 +160,6 @@ while i < opt.max_steps:
             opt.lr = opt.lr * 0.985
             print("Decaying learning rate to: ", opt.lr)
             set_lr(optimizer, opt.lr)
-
-        if is_update_time:
-            progress = progressbar.ProgressBar(max_value=opt.print_every)
 
         if i >= opt.max_steps:
             break
