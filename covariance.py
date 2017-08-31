@@ -23,6 +23,7 @@ from params import *
 from generations import *
 from atari_dataset import AtariData
 from video_dataset import *
+from setup import normalize_data
 
 import sklearn.covariance
 
@@ -37,32 +38,27 @@ def construct_covariance(savedir, model, loader, n, label=""):
     KL = GaussianKLD().type(dtype)
     LL = GaussianLL().type(dtype)
 
-    def sequence_input(seq):
-        return [Variable(x.type(dtype)) for x in seq]
-
     zs = []
 
     for i in range(len(data)):
-        x = data[i]
-        x.transpose_(0, 1)
-        x = sequence_input(list(x))
+        x = normalize_data(opt, dtype, data[i])
 
         for a in x:
             a.volatile = True
 
-        inferred_z_post = model.inference(x[0], model.z1_prior)
+        # inferred_z_post = model.inference(x[0], model.z1_prior)
         cat_prior = model.z1_prior
 
         seq_zs = []
         for t in range(len(x)):
+            inferred_z_post = model.inference(x[t], cat_prior)
             seq_zs.append(inferred_z_post[0])
             z_sample = sample(inferred_z_post)
             # gen_dist = model.generator(z_sample)
 
             if t < len(x) - 1:
                 cat_prior = model.predict_latent(z_sample)
-                inferred_z_post = model.inference(x[t+1],
-                                                  cat_prior)
+                
         zs.append(seq_zs)
 
     paired_zs = []

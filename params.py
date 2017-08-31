@@ -40,7 +40,9 @@ parser.add_argument('--load', default=None)
 parser.add_argument('--use-loaded-opt', action="store_true")
 parser.add_argument('--resume', action="store_true")
 
-parser.add_argument('--print-every', default=200000, type=int)
+parser.add_argument('--print-every', default=10000, type=int)
+parser.add_argument('--cov-every', default=200000, type=int)
+parser.add_argument('--save-every', default=200000, type=int)
 parser.add_argument('--max-steps', default=5e8, type=int)
 parser.add_argument('--seed', default=0, type=int)
 
@@ -74,5 +76,3 @@ parser.add_argument('--balls', default=1, type=int,
 parser.add_argument('--image-width', default=128, type=int)
 parser.add_argument('--channels', default=3, type=int)
 opt = parser.parse_args()
-
-# batch_size = opt.batch_size

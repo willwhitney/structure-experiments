@@ -187,3 +187,18 @@ def load_dataset(opt):
             train_data.seq_len = opt.seq_len
             test_data.seq_len = opt.seq_len
     return train_data, test_data, load_workers
+
+def normalize_data(opt, dtype, sequence):
+    if opt.data == 'mnist':
+        sequence = [sequence[0]]
+    elif opt.data == 'moving-mnist':
+        sequence.transpose_(0, 1)
+        if opt.channels > 1:
+            sequence.transpose_(3, 4).transpose_(2, 3)
+    elif opt.data == 'random_balls':
+        sequence, randomize = sequence
+        sequence.transpose_(0, 1)
+        randomize = randomize[1:]
+    else:
+        sequence.transpose_(0, 1)
+    return sequence_input(sequence, dtype)

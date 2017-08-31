@@ -193,11 +193,8 @@ class IndependentModel(nn.Module):
         # inferred_z_post = self.first_inference(reshaped_sequence[0])
         cat_prior = self.z1_prior
 
-        z_var_mean = 0
-        z_var_min = 1e6
-        z_var_max = -1e6
-
         prior_variances = []
+        posterior_variances = []
 
         # if len(sequence) > 1:
         #     diffs = motion_diffs(sequence)
@@ -224,9 +221,7 @@ class IndependentModel(nn.Module):
             else:
                 seq_trans_div = seq_trans_div + divergence
 
-            z_var_mean += inferred_z_post[1].mean().data[0]
-            z_var_min = min(z_var_min, inferred_z_post[1].data.min())
-            z_var_max = max(z_var_max, inferred_z_post[1].data.max())
+            posterior_variances.append(inferred_z_post[1])
 
             z_sample = sample_log2(inferred_z_post)
             gen_dist = self.generator(z_sample)
@@ -235,9 +230,8 @@ class IndependentModel(nn.Module):
                 log_likelihood = LL(gen_dist,
                                     reshaped_sequence[t])
             elif opt.loss == 'bce':
-                # pdb.set_trace()
-                log_likelihood = (-bce(gen_dist[0], reshaped_sequence[t]) / \
-                                  sequence[0].size(0))
+                log_likelihood = -bce(gen_dist[0], reshaped_sequence[t]) / \
+                                  sequence[0].size(0)
             else:
                 raise Exception('Invalid loss function.')
 
@@ -251,11 +245,6 @@ class IndependentModel(nn.Module):
                 cat_prior = self.predict_latent(z_sample)
                 prior_variances.append(cat_prior[1])
 
-
-                # z_var_mean += cat_prior[1].mean().data[0]
-                # z_var_min = min(z_var_min, cat_prior[1].data.min())
-                # z_var_max = max(z_var_max, cat_prior[1].data.max())
-
         seq_divergence = seq_divergence / len(sequence)
         seq_prior_div = seq_prior_div
         if len(sequence) > 1:
@@ -265,7 +254,7 @@ class IndependentModel(nn.Module):
                 # loss / len(sequence),
                 seq_nll / len(sequence),
                 (seq_divergence, seq_prior_div, seq_trans_div), 
-                (z_var_min, z_var_mean, z_var_max, prior_variances))
+                (prior_variances, posterior_variances))
 
     def generate(self, priming, steps, sampling=True):
         priming_steps = len(priming)

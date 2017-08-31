@@ -129,30 +129,13 @@ last_covariance = 0
 random_mean_vars = []
 norandom_mean_vars = []
 
-
 progress = progressbar.ProgressBar(max_value=opt.print_every)
 while i < opt.max_steps:
     for sequence in train_loader:
         i += opt.batch_size
         # pdb.set_trace()
 
-        if opt.data == 'mnist':
-            sequence = [sequence[0]]
-        elif opt.data == 'moving-mnist':
-            sequence.transpose_(0, 1)
-            if opt.channels > 1:
-                sequence.transpose_(3, 4).transpose_(2, 3)
-        elif opt.data == 'random_balls':
-            sequence, randomize = sequence
-            sequence.transpose_(0, 1)
-            randomize = randomize[1:]
-        else:
-            sequence.transpose_(0, 1)
-            # resized_sequence = []
-            # for frame_batch in sequence:
-            #     for frame in frame_batch:
-
-        sequence = sequence_input(list(sequence), dtype)
+        sequence = normalize_data(opt, dtype, sequence)
 
         generations, nll, divergences, batch_z_vars = model(sequence,
                                               motion_weight=opt.motion_weight)
@@ -162,10 +145,12 @@ while i < opt.max_steps:
         mean_trans_div += seq_trans_div.data[0]
         mean_nll += nll.data[0]
 
-        var_min, var_mean, var_max, p_vars = batch_z_vars
-        q_var_means.append(var_mean)
-        q_var_min = min(var_min, q_var_min)
-        q_var_max = max(var_max, q_var_max)
+        p_vars, q_vars = batch_z_vars
+
+        q_var_means.append(sum([v.data.mean() for v in q_vars]) / \
+                               len(q_vars))
+        q_var_min = min(*[v.data.min() for v in q_vars], q_var_min)
+        q_var_max = max(*[v.data.max() for v in q_vars], q_var_max)
 
         if opt.seq_len > 1:
             p_var_means.append(sum([v.data.mean() for v in p_vars]) / \
@@ -232,6 +217,7 @@ while i < opt.max_steps:
                 p_var_mean = sum(p_var_means) / len(p_var_means)
             else:
                 p_var_mean = 0
+            q_var_mean = sum(q_var_means) / len(q_var_means)
             log_values = (i,
                           mean_loss / batches,
                           mean_nll / batches,
@@ -239,7 +225,7 @@ while i < opt.max_steps:
                           mean_prior_div / batches,
                           mean_trans_div / batches,
                           q_var_min, 
-                          sum(q_var_means) / len(q_var_means),
+                          q_var_mean,
                           q_var_max,
                           p_var_min, 
                           p_var_mean,
@@ -285,10 +271,8 @@ while i < opt.max_steps:
                 save_all_generations(i, model, sequence, generations)
             except:
                 traceback.print_exc()
-                # pdb.set_trace()
 
-        save_every = int(1e6)
-        if i >= opt.max_steps or (i % save_every == 0 and i > 0):
+        if i >= opt.max_steps or (i % opt.save_every == 0 and i > 0):
             save_dict = {
                     'model': model,
                     'opt': vars(opt),
@@ -297,7 +281,7 @@ while i < opt.max_steps:
             torch.save(save_dict, opt.save + '/model.t7')
 
         if opt.seq_len > 1:
-            if i == opt.max_steps or i - last_covariance > 1e7:
+            if i == opt.max_steps or i - last_covariance > opt.cov_every:
                 construct_covariance(opt.save + '/covariance/', 
                                      model, train_loader, 2000,
                                      label="train_" + str(i))
