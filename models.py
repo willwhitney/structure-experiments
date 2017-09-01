@@ -172,29 +172,22 @@ class IndependentModel(nn.Module):
         return cat_prior
 
     def forward(self, sequence, motion_weight=0):
-        # loss = Variable(torch.zeros(1).type(dtype))
-        seq_divergence = Variable(torch.zeros(1).type(dtype))
-        seq_prior_div = Variable(torch.zeros(1).type(dtype))
-        seq_trans_div = Variable(torch.zeros(1).type(dtype))
-
-        seq_nll = Variable(torch.zeros(1).type(dtype))
-
-        # batch_size = sequence[0].size(0)
-        generations = []
-
         reshaped_sequence = sequence
-        # if isinstance(self.inference, ConvInference):
         reshaped_sequence = [x.resize(x.size(0),
                                       opt.channels,
                                       self.img_size,
                                       self.img_size)
                              for x in sequence]
 
-        # inferred_z_post = self.first_inference(reshaped_sequence[0])
-        cat_prior = self.z1_prior
-
-        prior_variances = []
-        posterior_variances = []
+        output = {
+            'generations': [],
+            'prior_variances': [],
+            'posterior_variances': [],
+            'seq_divergence': Variable(torch.zeros(1).type(dtype)),
+            'seq_prior_div': Variable(torch.zeros(1).type(dtype)),
+            'seq_trans_div': Variable(torch.zeros(1).type(dtype)),
+            'seq_nll': Variable(torch.zeros(1).type(dtype)),
+        }
 
         # if len(sequence) > 1:
         #     diffs = motion_diffs(sequence)
@@ -203,6 +196,7 @@ class IndependentModel(nn.Module):
         #     ones = Variable(torch.ones(sequence[0].size()).type(dtype))
         #     pixel_weights = [ones]
 
+        cat_prior = self.z1_prior
         for t in range(len(sequence)):
 
             # give it the sample from z_{t-1}
@@ -213,15 +207,15 @@ class IndependentModel(nn.Module):
                                              cat_prior)
 
             divergence = KL(inferred_z_post, cat_prior)
-            seq_divergence = seq_divergence + divergence
-            if math.isnan(seq_divergence.data.sum()):
+            output['seq_divergence'] += divergence
+            if math.isnan(output['seq_divergence'].data.sum()):
                 pdb.set_trace()
             if t == 0:
-                seq_prior_div = seq_prior_div + divergence
+                output['seq_prior_div'] += divergence
             else:
-                seq_trans_div = seq_trans_div + divergence
+                output['seq_trans_div'] += divergence
 
-            posterior_variances.append(inferred_z_post[1])
+            output['posterior_variances'].append(inferred_z_post[1])
 
             z_sample = sample_log2(inferred_z_post)
             gen_dist = self.generator(z_sample)
@@ -235,26 +229,21 @@ class IndependentModel(nn.Module):
             else:
                 raise Exception('Invalid loss function.')
 
-            seq_nll = seq_nll - log_likelihood
-            if math.isnan(seq_nll.data.sum()):
+            output['seq_nll'] += - log_likelihood
+            if math.isnan(output['seq_nll'].data.sum()):
                 pdb.set_trace()
 
-            generations.append(gen_dist)
+            output['generations'].append(gen_dist)
 
             if t < len(sequence) - 1:
                 cat_prior = self.predict_latent(z_sample)
-                prior_variances.append(cat_prior[1])
+                output['prior_variances'].append(cat_prior[1])
 
-        seq_divergence = seq_divergence / len(sequence)
-        seq_prior_div = seq_prior_div
+        output['seq_divergence'] = output['seq_divergence'] / len(sequence)
         if len(sequence) > 1:
-            seq_trans_div = seq_trans_div / (len(sequence) - 1)
+            output['seq_trans_div'] /= (len(sequence) - 1)
 
-        return (generations,
-                # loss / len(sequence),
-                seq_nll / len(sequence),
-                (seq_divergence, seq_prior_div, seq_trans_div), 
-                (prior_variances, posterior_variances))
+        return output
 
     def generate(self, priming, steps, sampling=True):
         priming_steps = len(priming)

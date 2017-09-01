@@ -421,3 +421,8 @@ def ensure_path_exists(fn):
             os.makedirs(os.path.dirname(path), exist_ok=True)
             fn(path, *args, **kwargs)
     return wrapper
+
+def mean_of_means(tensor_list):
+    if type(tensor_list[0]) == torch.autograd.variable.Variable:
+        tensor_list = [t.data for t in tensor_list]
+    return sum([t.mean() for t in tensor_list]) / len(tensor_list)

@@ -51,6 +51,8 @@ def load_checkpoint(opt):
     checkpoint = torch.load('results/' + opt.load + '/model.t7')
     model = checkpoint['model'].type(dtype)
     i = checkpoint['i']
+    # optimizer = checkpoint['optimizer']
+    # scheduler = checkpoint['scheduler']
     cp_opt = checkpoint['opt']
 
     # we're strictly trying to pick up where we left off

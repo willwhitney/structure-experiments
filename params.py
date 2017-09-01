@@ -32,9 +32,9 @@ parser.add_argument('--kl-anneal', dest='kl_anneal', action='store_true')
 parser.add_argument('--no-kl-anneal', dest='kl_anneal', action='store_false')
 parser.set_defaults(kl_anneal=False)
 
-parser.add_argument('--sgld', dest='sgld', action='store_true')
-parser.add_argument('--no-sgld', dest='sgld', action='store_false')
-parser.set_defaults(sgld=False)
+# parser.add_argument('--sgld', dest='sgld', action='store_true')
+# parser.add_argument('--no-sgld', dest='sgld', action='store_false')
+# parser.set_defaults(sgld=False)
 
 parser.add_argument('--load', default=None)
 parser.add_argument('--use-loaded-opt', action="store_true")
