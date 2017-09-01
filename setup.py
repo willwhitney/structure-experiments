@@ -197,6 +197,8 @@ def normalize_data(opt, dtype, sequence):
         sequence.transpose_(0, 1)
         if opt.channels > 1:
             sequence.transpose_(3, 4).transpose_(2, 3)
+        else:
+            sequence.unsqueeze_(2)
     elif opt.data == 'random_balls':
         sequence, randomize = sequence
         sequence.transpose_(0, 1)

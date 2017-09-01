@@ -36,6 +36,9 @@ parser.set_defaults(kl_anneal=False)
 # parser.add_argument('--no-sgld', dest='sgld', action='store_false')
 # parser.set_defaults(sgld=False)
 
+parser.add_argument('--lr-decay', default=0.985, type=float)
+
+
 parser.add_argument('--load', default=None)
 parser.add_argument('--use-loaded-opt', action="store_true")
 parser.add_argument('--resume', action="store_true")
@@ -56,7 +59,7 @@ parser.add_argument('--data-sparsity', default=1, type=int)
 parser.add_argument('--motion-weight', default=0, type=int)
 
 parser.add_argument('--lr', default=3e-4, type=float)
-parser.add_argument('--no-lr_decay', action="store_true")
+# parser.add_argument('--no-lr_decay', action="store_true")
 parser.add_argument('--activation', default="selu")
 parser.add_argument('--kl-anneal-end', default=3e6, type=float)
 parser.add_argument('--kl-weight', default=1, type=int)

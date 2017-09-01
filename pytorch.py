@@ -100,7 +100,7 @@ optimizer = optim.Adam(
     model.parameters(),
     lr=opt.lr)
 
-lr_lambda = lambda epoch: 0.985 ** (i / 320000)
+lr_lambda = lambda epoch: opt.lr_decay ** (i / 320000)
 scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda)
 
 
@@ -212,12 +212,13 @@ def save_checkpoint(step, state):
     torch.save(save_dict, opt.save + '/model.t7')
 
 def make_covariance(step, state):
-    construct_covariance(opt.save + '/covariance/', 
-                         model, train_loader, 2000,
-                         label="train_" + str(step))
-    construct_covariance(opt.save + '/covariance/',
-                         model, test_loader, 2000,
-                         label="test_" + str(step))
+    if opt.seq_len > 1:
+        construct_covariance(opt.save + '/covariance/', 
+                             model, train_loader, 10,
+                             label="train_" + str(step))
+        construct_covariance(opt.save + '/covariance/',
+                             model, test_loader, 10,
+                             label="test_" + str(step))
 
 bookkeeper = Bookkeeper(i, reset_state({}), update_reducer)
 bookkeeper.every(opt.print_every, make_log)
@@ -227,15 +228,11 @@ bookkeeper.every(opt.cov_every, make_covariance)
 random_mean_vars = []
 norandom_mean_vars = []
 
-# import ipdb; ipdb.set_trace()
-
 while i < opt.max_steps:
     for sequence in train_loader:
         i += opt.batch_size
 
         sequence = normalize_data(opt, dtype, sequence)
-        # pdb.set_trace()
-
         output = model(sequence, motion_weight=opt.motion_weight)
         generations = output['generations']
         bookkeeper.update(i, output)
