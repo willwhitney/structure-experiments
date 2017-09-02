@@ -201,7 +201,7 @@ def make_log(step, state):
         save_all_generations(step, model, sequence, generations)
     except:
         traceback.print_exc()
-        pdb.set_trace()
+        # pdb.set_trace()
 
 def save_checkpoint(step, state):
     save_dict = {
@@ -239,6 +239,7 @@ while i < opt.max_steps:
 
         nll = output['seq_nll']
         seq_divergence = output['seq_divergence']
+        # seq_divergence = output['seq_trans_div']
 
         # accumulate the variances for randomizing and nonrandomizing frames
         if opt.data == 'random_balls':

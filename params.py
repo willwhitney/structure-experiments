@@ -38,7 +38,6 @@ parser.set_defaults(kl_anneal=False)
 
 parser.add_argument('--lr-decay', default=0.985, type=float)
 
-
 parser.add_argument('--load', default=None)
 parser.add_argument('--use-loaded-opt', action="store_true")
 parser.add_argument('--resume', action="store_true")

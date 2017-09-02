@@ -15,6 +15,7 @@ import math
 import logging
 from util import *
 from setup import make_result_folder, write_options
+from moving_mnist.dataset import MovingMNIST
 # from modules import GaussianKLD
 
 parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
@@ -23,6 +24,10 @@ parser.add_argument('--batch-size', type=int, default=128, metavar='N',
                     help='input batch size for training (default: 64)')
 parser.add_argument('--epochs', type=int, default=10, metavar='N',
                     help='number of epochs to train (default: 2)')
+parser.add_argument('--hidden-dim', type=int, default=20, metavar='N',
+                    help='size of the hidden dim (default: 20)')
+parser.add_argument('--mlp', action="store_true",
+                    help='use mlp instead of tinydcgan')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='disables CUDA training')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
@@ -40,7 +45,7 @@ write_options(args, args.save)
 logging.basicConfig(filename = args.save + "/results.csv",
                     level = logging.DEBUG,
                     format = "%(message)s")
-logging.debug(("step,train_loss,train_prior_loss,train_likelihood,"
+logging.debug(("step,loss,divergence,prior divergence,nll,"
                "test_loss,test_prior_loss,test_likelihood"))
 
 torch.manual_seed(args.seed)
@@ -55,6 +60,21 @@ train_loader = torch.utils.data.DataLoader(
 test_loader = torch.utils.data.DataLoader(
     datasets.MNIST('../data', train=False, transform=transforms.ToTensor()),
     batch_size=args.batch_size, shuffle=True, **kwargs)
+
+train_loader = torch.utils.data.DataLoader(
+    MovingMNIST(train=True, 
+                seq_len=1,
+                image_size=28,
+                colored=False),
+    batch_size=args.batch_size, shuffle=True, **kwargs)
+test_loader = torch.utils.data.DataLoader(
+    MovingMNIST(train=False, 
+                seq_len=1,
+                image_size=28,
+                colored=False),
+    batch_size=args.batch_size, shuffle=True, **kwargs)
+
+
 
 activation = F.relu
 dtype = torch.cuda.FloatTensor
@@ -276,309 +296,82 @@ class TinyDCGANGenerator(nn.Module):
         sigma = Variable(torch.ones(mu.size()).type(dtype) * 0.5)
         return (mu, sigma)
 
-class VAE(nn.Module):
-    def __init__(self):
-        super(VAE, self).__init__()
+if args.mlp:
+    class VAE(nn.Module):
+        def __init__(self):
+            super(VAE, self).__init__()
 
-        self.encoder = TinyDCGANFirstInference([1, 28, 28], 20)
-        self.decoder = TinyDCGANGenerator(20, [1, 28, 28])
+            self.fc1 = nn.Linear(784, 400)
+            self.fc21 = nn.Linear(400, args.hidden_dim)
+            self.fc22 = nn.Linear(400, args.hidden_dim)
+            self.fc3 = nn.Linear(args.hidden_dim, 400)
+            self.fc41 = nn.Linear(400, 784)
+            self.fc42 = nn.Linear(400, 784)
 
-        self.relu = nn.ReLU()
-        self.sigmoid = nn.Sigmoid()
+            self.relu = nn.ReLU()
+            self.sigmoid = nn.Sigmoid()
 
-    def encode(self, x):
-        mu, sigma = self.encoder(x)
-        return mu, sigma
+        def encode(self, x):
+            h1 = self.relu(self.fc1(x))
+            # return self.fc21(h1), self.sigmoid(self.fc22(h1)) * 4
+            return self.fc21(h1), self.fc22(h1)
 
-    def reparametrize(self, mu, logvar):
-        std = logvar.mul(0.5).exp_()
-        if args.cuda:
-            eps = torch.cuda.FloatTensor(std.size()).normal_()
-        else:
-            eps = torch.FloatTensor(std.size()).normal_()
-        eps = Variable(eps)
-        return eps.mul(std).add_(mu)
+        def reparametrize(self, mu, logvar):
+            std = logvar.mul(0.5).exp_()
+            if args.cuda:
+                eps = torch.cuda.FloatTensor(std.size()).normal_()
+            else:
+                eps = torch.FloatTensor(std.size()).normal_()
+            eps = Variable(eps)
+            return eps.mul(std).add_(mu)
 
-    def decode(self, z):
-        mu, sigma = self.decoder(z)
-        return self.sigmoid(mu), sigma
+        def decode(self, z):
+            h3 = self.relu(self.fc3(z))
+            return self.sigmoid(self.fc41(h3)), self.fc42(h3)
 
-    def forward(self, x):
-        mu, logvar = self.encode(x)
-        # z = self.reparametrize(mu, logvar)
-        z = sample_log2((mu, logvar))
-        xhat = self.decode(z)
-        return xhat, mu, logvar
+        def forward(self, x):
+            mu, logvar = self.encode(x.view(-1, 784))
+            # z = self.reparametrize(mu, logvar)
+            z = sample_log2((mu, logvar))
+            xhat = self.decode(z)
+            return xhat, mu, logvar
+else:
+    class VAE(nn.Module):
+        def __init__(self):
+            super(VAE, self).__init__()
 
-# class VAE(nn.Module):
-#     def __init__(self):
-#         super(VAE, self).__init__()
+            self.encoder = TinyDCGANFirstInference([1, 28, 28], 
+                                                   args.hidden_dim)
+            self.decoder = TinyDCGANGenerator(args.hidden_dim, [1, 28, 28])
 
-#         self.fc1 = nn.Linear(784, 400)
-#         self.fc21 = nn.Linear(400, 20)
-#         self.fc22 = nn.Linear(400, 20)
-#         self.fc3 = nn.Linear(20, 400)
-#         self.fc41 = nn.Linear(400, 784)
-#         self.fc42 = nn.Linear(400, 784)
+            self.relu = nn.ReLU()
+            self.sigmoid = nn.Sigmoid()
 
-#         self.relu = nn.ReLU()
-#         self.sigmoid = nn.Sigmoid()
+        def encode(self, x):
+            mu, sigma = self.encoder(x)
+            return mu, sigma
 
-#     def encode(self, x):
-#         h1 = self.relu(self.fc1(x))
-#         # return self.fc21(h1), self.sigmoid(self.fc22(h1)) * 4
-#         return self.fc21(h1), self.fc22(h1)
+        def reparametrize(self, mu, logvar):
+            std = logvar.mul(0.5).exp_()
+            if args.cuda:
+                eps = torch.cuda.FloatTensor(std.size()).normal_()
+            else:
+                eps = torch.FloatTensor(std.size()).normal_()
+            eps = Variable(eps)
+            return eps.mul(std).add_(mu)
 
-#     def reparametrize(self, mu, logvar):
-#         std = logvar.mul(0.5).exp_()
-#         if args.cuda:
-#             eps = torch.cuda.FloatTensor(std.size()).normal_()
-#         else:
-#             eps = torch.FloatTensor(std.size()).normal_()
-#         eps = Variable(eps)
-#         return eps.mul(std).add_(mu)
+        def decode(self, z):
+            mu, sigma = self.decoder(z)
+            return self.sigmoid(mu), sigma
 
-#     def decode(self, z):
-#         h3 = self.relu(self.fc3(z))
-#         return self.sigmoid(self.fc41(h3)), self.fc42(h3)
+        def forward(self, x):
+            mu, logvar = self.encode(x)
+            # z = self.reparametrize(mu, logvar)
+            z = sample_log2((mu, logvar))
+            xhat = self.decode(z)
+            return xhat, mu, logvar
 
-#     def forward(self, x):
-#         mu, logvar = self.encode(x.view(-1, 784))
-#         # z = self.reparametrize(mu, logvar)
-#         z = sample_log2((mu, logvar))
-#         xhat = self.decode(z)
-#         return xhat, mu, logvar
 
-# class GaussianKLD(nn.Module):
-#     def forward(self, q, p):
-#         (mu_q, log_sigma_q) = q
-#         (mu_p, log_sigma_p) = p
-#         mu_q = batch_flatten(mu_q)
-#         log_sigma_q = batch_flatten(log_sigma_q)
-#         mu_p = batch_flatten(mu_p)
-#         log_sigma_p = batch_flatten(log_sigma_p)
-
-#         # log_sigma_p = torch.log(sigma_p)
-#         # log_sigma_q = torch.log(sigma_q)
-#         sum_log_sigma_p = torch.sum(log_sigma_p, 1, keepdim=True)
-#         sum_log_sigma_q = torch.sum(log_sigma_q, 1, keepdim=True)
-#         a = sum_log_sigma_p - sum_log_sigma_q
-#         b = torch.sum(torch.exp(log_sigma_q - log_sigma_p), 1, keepdim=True)
-
-#         mu_diff = mu_p - mu_q
-#         c = torch.sum(
-#             torch.pow(mu_diff, 2) / torch.exp(log_sigma_p), 1, keepdim=True)
-
-#         D = mu_q.size(1)
-#         divergences = torch.mul(a + b + c - D, 0.5)
-#         return divergences.mean()
-
-# class OriginalGaussianKLD(nn.Module):
-#     def forward(self, q, p):
-#         (mu_q, sigma_q) = q
-#         (mu_p, sigma_p) = p
-#         mu_q = batch_flatten(mu_q)
-#         sigma_q = batch_flatten(sigma_q)
-#         mu_p = batch_flatten(mu_p)
-#         sigma_p = batch_flatten(sigma_p)
-
-#         log_sigma_p = torch.log(sigma_p)
-#         log_sigma_q = torch.log(sigma_q)
-#         sum_log_sigma_p = torch.sum(log_sigma_p, 1, keepdim=True)
-#         sum_log_sigma_q = torch.sum(log_sigma_q, 1, keepdim=True)
-#         a = sum_log_sigma_p - sum_log_sigma_q
-#         b = torch.sum(sigma_q / sigma_p, 1, keepdim=True)
-
-#         mu_diff = mu_p - mu_q
-#         c = torch.sum(torch.pow(mu_diff, 2) / sigma_p, 1, keepdim=True)
-
-#         D = mu_q.size(1)
-#         divergences = torch.mul(a + b + c - D, 0.5)
-#         return divergences.mean()
-
-# class FixedGaussianKLD(nn.Module):
-#     def forward(self, q, p):
-#         (mu_q, sigma_q) = q
-#         (mu_p, sigma_p) = p
-#         mu_q = batch_flatten(mu_q)
-#         sigma_q = batch_flatten(sigma_q)
-#         sigma_q2 = torch.pow(sigma_q, 2)
-#         mu_p = batch_flatten(mu_p)
-#         sigma_p = batch_flatten(sigma_p)
-#         sigma_p2 = torch.pow(sigma_p, 2)
-#         # pdb.set_trace()
-
-#         # a = torch.dot(1 / sigma_p, sigma_q)
-#         a = torch.sum((1 / sigma_p2) * sigma_q2, 1, keepdim=True)
-        
-#         diff = mu_p - mu_q
-#         # b = torch.dot(diff, (1 / sigma_p) * diff)
-#         b = torch.sum(diff * ((1 / sigma_p2) * diff), 1, keepdim=True)
-
-#         c = - mu_q.size(1)
-
-#         # d = torch.log(torch.prod(sigma_p) / torch.prod(sigma_q))
-#         # d = torch.log(torch.prod(sigma_p, 1, keepdim=True) / 
-#                       # torch.prod(sigma_q, 1, keepdim=True))
-#         d = torch.log(torch.prod(sigma_p2, 1, keepdim=True)) - \
-#             torch.log(torch.prod(sigma_q2, 1, keepdim=True))
-
-#         divergences = 0.5 * (a + b + c + d)
-#         # if math.isnan(divergences.data.sum()):
-#         #     pdb.set_trace()
-
-#         # pdb.set_trace()
-#         return divergences.sum()
-
-# class LogSquaredGaussianKLD(nn.Module):
-#     def forward(self, q, p):
-#         (mu_q, log_sigma_q2) = q
-#         (mu_p, log_sigma_p2) = p
-#         mu_q = batch_flatten(mu_q)
-#         log_sigma_q2 = batch_flatten(log_sigma_q2)
-#         mu_p = batch_flatten(mu_p)
-#         log_sigma_p2 = batch_flatten(log_sigma_p2)
-#         # pdb.set_trace()
-
-#         # a = torch.dot(1 / sigma_p, sigma_q)
-#         # a = torch.sum((1 / sigma_p2) * sigma_q2, 1, keepdim=True)
-#         a = torch.sum(torch.exp(log_sigma_q2 - log_sigma_p2), 1, keepdim=True)
-        
-#         diff = mu_p - mu_q
-#         # b = torch.dot(diff, (1 / sigma_p) * diff)
-#         # b = torch.sum(diff * ((1 / sigma_p2) * diff), 1, keepdim=True)
-#         b = torch.sum(diff * diff * torch.exp(- log_sigma_p2), 1, keepdim=True)
-
-#         c = - mu_q.size(1)
-
-#         # d = torch.log(torch.prod(sigma_p) / torch.prod(sigma_q))
-#         # d = torch.log(torch.prod(sigma_p, 1, keepdim=True) / 
-#                       # torch.prod(sigma_q, 1, keepdim=True))
-#         d = torch.log(torch.exp(torch.sum(log_sigma_p2, 1, keepdim=True))) - \
-#             torch.log(torch.exp(torch.sum(log_sigma_q2, 1, keepdim=True)))
-
-#         divergences = 0.5 * (a + b + c + d)
-#         # if math.isnan(divergences.data.sum()):
-#         #     pdb.set_trace()
-
-#         # pdb.set_trace()
-#         return divergences.mean()
-
-# class SquaredGaussianKLD(nn.Module):
-#     def forward(self, q, p):
-#         (mu_q, sigma_q) = q
-#         (mu_p, sigma_p) = p
-#         mu_q = batch_flatten(mu_q)
-#         sigma_q = torch.pow(batch_flatten(sigma_q), 2)
-#         mu_p = batch_flatten(mu_p)
-#         sigma_p = torch.pow(batch_flatten(sigma_p), 2)
-
-#         log_sigma_p = torch.log(sigma_p)
-#         log_sigma_q = torch.log(sigma_q)
-#         sum_log_sigma_p = torch.sum(log_sigma_p, 1, keepdim=True)
-#         sum_log_sigma_q = torch.sum(log_sigma_q, 1, keepdim=True)
-#         a = sum_log_sigma_p - sum_log_sigma_q
-#         b = torch.sum(sigma_q / sigma_p, 1, keepdim=True)
-
-#         mu_diff = mu_p - mu_q
-#         c = torch.sum(torch.pow(mu_diff, 2) / sigma_p, 1, keepdim=True)
-
-#         D = mu_q.size(1)
-#         divergences = torch.mul(a + b + c - D, 0.5)
-#         return divergences.mean()
-
-# class GaussianLL(nn.Module):
-#     def forward(self, p, target):
-#         # print(p[0].size())
-#         # print(target.size())
-#         (mu, log_sigma) = p
-#         mu = batch_flatten(mu)
-#         log_sigma = batch_flatten(log_sigma)
-#         target = batch_flatten(target)
-
-#         # sigma = Variable(torch.ones(sigma.size()).type_as(sigma.data) / 10)
-
-#         a = torch.sum(log_sigma, 1, keepdim=True)
-#         diff = (target - mu)
-#         # b = torch.sum(
-#         #     torch.exp(2 * torch.log(diff) - log_sigma),
-#         #     1, keepdim=True)
-#         b = torch.sum(
-#             torch.pow(diff, 2) * torch.exp(-log_sigma), 1, keepdim=True)
-
-#         c = mu.size(1) * math.log(2*math.pi)
-#         log_likelihoods = -0.5 * (a + b + c)
-#         # if math.isnan(torch.sum(a.data)) or math.isnan(torch.sum(b.data)):
-#         #     pdb.set_trace()
-#             # print(torch.sum(a.data), torch.sum(b.data), c)
-#         # pdb.set_trace()
-#         # print(log_likelihoods.mean().data[0])
-#         return log_likelihoods.sum()
-
-# class LogSquaredGaussianLL(nn.Module):
-#     def forward(self, p, target):
-#         # print(p[0].size())
-#         # print(target.size())
-#         (mu, log_sigma2) = p
-#         mu = batch_flatten(mu)
-#         log_sigma2 = batch_flatten(log_sigma2)
-#         target = batch_flatten(target)
-
-#         # sigma = Variable(torch.ones(sigma.size()).type_as(sigma.data) / 10)
-
-#         a = torch.sum(0.5 * log_sigma2, 1, keepdim=True)
-#         diff = (target - mu)
-#         # b = torch.sum(
-#         #     torch.exp(2 * torch.log(diff) - 0.5 * log_sigma2),
-#         #     1, keepdim=True)
-#         b = torch.sum(
-#             torch.pow(diff, 2) * torch.exp(-0.5 * log_sigma2), 1, keepdim=True)
-
-#         c = mu.size(1) * math.log(2*math.pi)
-#         log_likelihoods = -0.5 * (a + b + c)
-#         # if math.isnan(torch.sum(a.data)) or math.isnan(torch.sum(b.data)):
-#         #     pdb.set_trace()
-#             # print(torch.sum(a.data), torch.sum(b.data), c)
-#         # pdb.set_trace()
-#         # print(log_likelihoods.mean().data[0])
-#         return log_likelihoods.mean()
-
-# class OtherGaussianLL(nn.Module):
-#     def forward(self, p, target):
-#         # print(p[0].size())
-#         # print(target.size())
-#         (mu, sigma) = p
-#         mu = batch_flatten(mu)
-#         sigma = batch_flatten(sigma)
-#         target = batch_flatten(target)
-#         sigma = torch.clamp(sigma, min=0.005)
-
-#         # sigma = Variable(torch.ones(sigma.size()).type_as(sigma.data) / 10)
-
-#         a = torch.sum(torch.log(sigma), 1, keepdim=True)
-#         diff = (target - mu)
-#         b = torch.sum(torch.pow(diff, 2) / sigma, 1, keepdim=True)
-#         c = mu.size(1) * math.log(2*math.pi)
-#         log_likelihoods = -0.5 * (a + b + c)
-#         return log_likelihoods.mean()
-
-# class OriginalGaussianLL(nn.Module):
-#     def forward(self, p, target):
-#         # print(p[0].size())
-#         # print(target.size())
-#         (mu, sigma) = p
-#         mu = batch_flatten(mu)
-#         sigma = batch_flatten(sigma)
-#         target = batch_flatten(target)
-
-#         # sigma = Variable(torch.ones(sigma.size()).type_as(sigma.data) / 10)
-
-#         a = torch.sum(torch.log(sigma), 1, keepdim=True)
-#         diff = (target - mu)
-#         b = torch.sum(torch.pow(diff, 2) / sigma, 1, keepdim=True)
-#         c = mu.size(1) * math.log(2*math.pi)
-#         log_likelihoods = -0.5 * (a + b + c)
-#         return log_likelihoods.mean()
 
 from loss_modules import LogSquaredGaussianKLD, GaussianLL, LogSquaredGaussianLL
 
@@ -661,7 +454,7 @@ def gaussianLL_loss_function(xhat, x, mu, logvar):
     # output_NLL = - othergaussianLL(xhat, x)
 
     # KLD_element = mu.pow(2).add_(logvar.exp()).mul_(-1).add_(1).add_(logvar)
-    # KLD = torch.sum(KLD_element).mul_(-0.5)
+    # KLD = torch.sum(KLD_element).mul_(-0.5) / args.batch_size
 
     zeros = Variable(torch.zeros(mu.size())).type_as(mu)
     zeros2 = Variable(torch.zeros(mu.size())).type_as(mu)
@@ -669,10 +462,11 @@ def gaussianLL_loss_function(xhat, x, mu, logvar):
     # KLD = gaussianKL((mu, torch.exp(logvar)), (zeros, ones))
     # KLD = squaredgaussianKL((mu, torch.exp(logvar)), (zeros, ones))
     # KLD = fixedgaussianKL((mu, torch.exp(0.5 * logvar)), (zeros, ones))
-    KLD = logsquaredgaussianKL((mu, logvar), (zeros, zeros2)) # * args.batch_size
+    KLD = logsquaredgaussianKL((mu, logvar), (zeros, zeros2))
     # KLD = gaussianKL((mu, logvar), (zeros, ones))
 
     return output_NLL + KLD, KLD, output_NLL
+    # return output_NLL, KLD, output_NLL
 
 # loss_function = gaussianKL_loss_function
 loss_function = gaussianLL_loss_function
@@ -695,8 +489,11 @@ optimizer = optim.Adam(model.parameters(), lr=1e-3)
 def train(epoch):
     model.train()
     train_loss, train_prior_loss, train_likelihood = 0, 0, 0
-    for batch_idx, (data, _) in enumerate(train_loader):
-        data = Variable(data)
+    # for batch_idx, (data, _) in enumerate(train_loader):
+    for batch_idx, data in enumerate(train_loader):
+        data.transpose_(0, 1)
+        data.unsqueeze_(2)
+        data = Variable(data[0])
         if args.cuda:
             data = data.cuda()
         optimizer.zero_grad()
@@ -724,10 +521,13 @@ def train(epoch):
 def test(epoch):
     model.eval()
     test_loss, test_prior_loss, test_likelihood = 0, 0, 0
-    for data, _ in test_loader:
+    # for data, _ in test_loader:
+    for data in test_loader:
+        data.transpose_(0, 1)
+        data.unsqueeze_(2)
         if args.cuda:
             data = data.cuda()
-        data = Variable(data, volatile=True)
+        data = Variable(data[0], volatile=True)
         recon_batch, mu, logvar = model(data)
         loss, prior, likelihood = loss_function(recon_batch, data, mu, logvar)
         test_loss += loss.data[0]
@@ -747,16 +547,29 @@ for epoch in range(1, args.epochs + 1):
     train_loss, train_prior_loss, train_likelihood = train(epoch)
     test_loss, test_prior_loss, test_likelihood = test(epoch)
 
-    log_values = (epoch, train_loss, train_prior_loss, train_likelihood, test_loss, test_prior_loss, test_likelihood)
+    log_values = (epoch, train_loss, train_prior_loss, train_prior_loss, train_likelihood, test_loss, test_prior_loss, test_likelihood)
     format_string = ",".join(["{:.8e}"]*len(log_values))
     logging.debug(format_string.format(*log_values))
 
-    z = Variable(torch.randn(args.batch_size, 20), volatile=True)
+    z = Variable(torch.randn(args.batch_size, args.hidden_dim), volatile=True)
     if args.cuda:
         z = z.cuda()
     # pdb.set_trace()
     generations = model.decode(z)[0]
     generations = generations.resize(generations.size(0), 28, 28)
+
+    for batch_idx, data in enumerate(train_loader):
+        data.transpose_(0, 1)
+        data.unsqueeze_(2)
+        data = Variable(data[0], volatile=True)
+        if args.cuda:
+            data = data.cuda()
+        recon_batch, mu, logvar = model(data)
+        recon_batch = recon_batch[0].data
+        recon_batch.resize_(recon_batch.size(0), 28, 28)
+        save_tensors_image("{}/recons{}.png".format(args.save, epoch),
+                       [g.expand(3, 28, 28) for g in recon_batch])  
+        break      
 
     save_tensors_image("{}/generations{}.png".format(args.save, epoch),
                        [g.expand(3, 28, 28) for g in generations])
