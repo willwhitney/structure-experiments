@@ -15,104 +15,6 @@ mse = nn.MSELoss().type(dtype)
 bce = nn.BCELoss().type(dtype)
 bce.size_average = False
 
-class VAEModel(nn.Module):
-    def __init__(self, hidden_dim, g_size):
-        super(VAEModel, self).__init__()
-        self.hidden_dim = hidden_dim
-        self.img_size = img_size
-
-        self.z1_prior = (
-            Variable(torch.zeros(opt.batch_size, self.hidden_dim).type(dtype)),
-            Variable(torch.ones(opt.batch_size, self.hidden_dim).type(dtype))
-        )
-
-        image_dim = [3, self.img_size, self.img_size]
-        self.transition = Transition(self.hidden_dim)
-        # self.first_inference = FirstInference(prod(image_dim), self.hidden_dim)
-        # self.inference = Inference(prod(image_dim), self.hidden_dim)
-        # self.generator = Generator(self.hidden_dim, prod(image_dim))
-
-        self.first_inference = ConvFirstInference(image_dim, self.hidden_dim)
-        self.inference = ConvInference(image_dim, self.hidden_dim)
-        self.generator = ConvGenerator(self.hidden_dim, image_dim)
-
-    def forward(self, sequence):
-        loss = Variable(torch.zeros(1).type(dtype))
-        seq_divergence = Variable(torch.zeros(1).type(dtype),
-                                  requires_grad=False)
-        # batch_size = sequence[0].size(0)
-        generations = []
-
-        reshaped_sequence = sequence
-        if isinstance(self.inference, ConvInference):
-            reshaped_sequence = [x.resize(x.size(0), 
-                                          3, self.img_size, self.img_size)
-                                 for x in sequence]
-        # reshaped_sequence = [x.resize(x.size(0), self.img_size, self.img_size, 3)
-        #                      for x in sequence]
-        # reshaped_sequence = [x.transpose(2, 3).transpose(1, 2)
-        #                      for x in reshaped_sequence]
-
-        inferred_z_post = self.first_inference(reshaped_sequence[0])
-        z_prior = self.z1_prior
-
-        z_var_mean = 0
-        z_var_min = 1e6
-        z_var_max = -1
-        for t in range(len(sequence)):
-            divergence = KL(inferred_z_post, z_prior)
-            seq_divergence = seq_divergence + divergence
-            loss = loss + divergence
-
-            z_sample = sample(inferred_z_post)
-            # z_sample = inferred_z_post[0]
-
-            gen_dist = self.generator(z_sample)
-            # log_likelihood = LL(gen_dist, reshaped_sequence[t])
-            log_likelihood = LL(gen_dist, reshaped_sequence[t])
-            loss = loss - log_likelihood
-
-            generations.append(gen_dist)
-
-            if t < len(sequence) - 1:
-                z_prior = self.transition(z_sample)
-                # z_prior = (z_prior[0],
-                #            Variable(torch.ones(z_prior[1].size()) * 5e-2).type(dtype))
-                inferred_z_post = self.inference(reshaped_sequence[t+1], z_sample)
-
-                z_var_mean += z_prior[1].mean().data[0]
-                z_var_min = min(z_var_min, z_prior[1].data.min())
-                z_var_max = max(z_var_max, z_prior[1].data.max())
-
-        z_var_mean = z_var_mean / (len(sequence) - 1) if len(sequence) > 1 else -1
-        return (generations,
-                loss / len(sequence),
-                seq_divergence.data[0] / len(sequence),
-                (z_var_min, z_var_mean, z_var_max))
-
-    def generate(self, priming, steps, sampling=True):
-        priming_steps = len(priming)
-        generations = []
-
-        if isinstance(self.inference, ConvInference):
-            priming = [x.resize(x.size(0),  3, self.img_size, self.img_size)
-                       for x in priming]
-
-        latent = self.first_inference(priming[0])[0]
-        generations.append(self.generator(latent)[0])
-        for t in range(1, priming_steps):
-            latent = self.inference(priming[t], latent)[0]
-            generations.append(self.generator(latent)[0])
-
-        for t in range(steps - priming_steps):
-            latent_dist = self.transition(latent)
-            if sampling:
-                latent = sample(latent_dist)
-            else:
-                latent = sample((latent_dist[0], latent_dist[1] / 100))
-            generations.append(self.generator(latent)[0])
-        return generations
-
 def motion_diffs(sequence):
     if len(sequence) == 1:
         return Variable(torch.zeros(sequence[0].size()))
@@ -239,7 +141,8 @@ class IndependentModel(nn.Module):
                 cat_prior = self.predict_latent(z_sample)
                 output['prior_variances'].append(cat_prior[1])
 
-        output['seq_divergence'] = output['seq_divergence'] / len(sequence)
+        output['seq_nll'] /= len(sequence)
+        output['seq_divergence'] /= len(sequence)
         if len(sequence) > 1:
             output['seq_trans_div'] /= (len(sequence) - 1)
 
@@ -504,4 +407,102 @@ class MSEModel(nn.Module):
 
             current_z = self.transition(current_z)[0]
 
+        return generations
+
+class VAEModel(nn.Module):
+    def __init__(self, hidden_dim, g_size):
+        super(VAEModel, self).__init__()
+        self.hidden_dim = hidden_dim
+        self.img_size = img_size
+
+        self.z1_prior = (
+            Variable(torch.zeros(opt.batch_size, self.hidden_dim).type(dtype)),
+            Variable(torch.ones(opt.batch_size, self.hidden_dim).type(dtype))
+        )
+
+        image_dim = [3, self.img_size, self.img_size]
+        self.transition = Transition(self.hidden_dim)
+        # self.first_inference = FirstInference(prod(image_dim), self.hidden_dim)
+        # self.inference = Inference(prod(image_dim), self.hidden_dim)
+        # self.generator = Generator(self.hidden_dim, prod(image_dim))
+
+        self.first_inference = ConvFirstInference(image_dim, self.hidden_dim)
+        self.inference = ConvInference(image_dim, self.hidden_dim)
+        self.generator = ConvGenerator(self.hidden_dim, image_dim)
+
+    def forward(self, sequence):
+        loss = Variable(torch.zeros(1).type(dtype))
+        seq_divergence = Variable(torch.zeros(1).type(dtype),
+                                  requires_grad=False)
+        # batch_size = sequence[0].size(0)
+        generations = []
+
+        reshaped_sequence = sequence
+        if isinstance(self.inference, ConvInference):
+            reshaped_sequence = [x.resize(x.size(0), 
+                                          3, self.img_size, self.img_size)
+                                 for x in sequence]
+        # reshaped_sequence = [x.resize(x.size(0), self.img_size, self.img_size, 3)
+        #                      for x in sequence]
+        # reshaped_sequence = [x.transpose(2, 3).transpose(1, 2)
+        #                      for x in reshaped_sequence]
+
+        inferred_z_post = self.first_inference(reshaped_sequence[0])
+        z_prior = self.z1_prior
+
+        z_var_mean = 0
+        z_var_min = 1e6
+        z_var_max = -1
+        for t in range(len(sequence)):
+            divergence = KL(inferred_z_post, z_prior)
+            seq_divergence = seq_divergence + divergence
+            loss = loss + divergence
+
+            z_sample = sample(inferred_z_post)
+            # z_sample = inferred_z_post[0]
+
+            gen_dist = self.generator(z_sample)
+            # log_likelihood = LL(gen_dist, reshaped_sequence[t])
+            log_likelihood = LL(gen_dist, reshaped_sequence[t])
+            loss = loss - log_likelihood
+
+            generations.append(gen_dist)
+
+            if t < len(sequence) - 1:
+                z_prior = self.transition(z_sample)
+                # z_prior = (z_prior[0],
+                #            Variable(torch.ones(z_prior[1].size()) * 5e-2).type(dtype))
+                inferred_z_post = self.inference(reshaped_sequence[t+1], z_sample)
+
+                z_var_mean += z_prior[1].mean().data[0]
+                z_var_min = min(z_var_min, z_prior[1].data.min())
+                z_var_max = max(z_var_max, z_prior[1].data.max())
+
+        z_var_mean = z_var_mean / (len(sequence) - 1) if len(sequence) > 1 else -1
+        return (generations,
+                loss / len(sequence),
+                seq_divergence.data[0] / len(sequence),
+                (z_var_min, z_var_mean, z_var_max))
+
+    def generate(self, priming, steps, sampling=True):
+        priming_steps = len(priming)
+        generations = []
+
+        if isinstance(self.inference, ConvInference):
+            priming = [x.resize(x.size(0),  3, self.img_size, self.img_size)
+                       for x in priming]
+
+        latent = self.first_inference(priming[0])[0]
+        generations.append(self.generator(latent)[0])
+        for t in range(1, priming_steps):
+            latent = self.inference(priming[t], latent)[0]
+            generations.append(self.generator(latent)[0])
+
+        for t in range(steps - priming_steps):
+            latent_dist = self.transition(latent)
+            if sampling:
+                latent = sample(latent_dist)
+            else:
+                latent = sample((latent_dist[0], latent_dist[1] / 100))
+            generations.append(self.generator(latent)[0])
         return generations
