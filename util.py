@@ -23,19 +23,21 @@ def prod(l):
     return functools.reduce(lambda x, y: x * y, l)
 
 def image_tensor(inputs, padding=1):
-    assert is_sequence(inputs)
+    # assert is_sequence(inputs)
     assert len(inputs) > 0
     # print(inputs)
-    if is_sequence(inputs[0]):
+
+    # if this is a list of lists, unpack them all and grid them up
+    if is_sequence(inputs[0]) or (hasattr(inputs, "dim") and inputs.dim() > 4):
         images = [image_tensor(x) for x in inputs]
         if images[0].dim() == 3:
             c_dim = images[0].size(0)
             x_dim = images[0].size(1)
             y_dim = images[0].size(2)
-        else:
-            c_dim = 1
-            x_dim = images[0].size(0)
-            y_dim = images[0].size(1)
+        # else:
+            # c_dim = 1
+            # x_dim = images[0].size(0)
+            # y_dim = images[0].size(1)
 
         result = torch.ones(c_dim,
                             x_dim * len(images) + padding * (len(images)-1),
@@ -45,6 +47,8 @@ def image_tensor(inputs, padding=1):
                    (i+1) * x_dim + i * padding, :].copy_(image)
 
         return result
+
+    # if this is just a list, make a stacked image
     else:
         images = [x.data if isinstance(x, torch.autograd.Variable) else x
                   for x in inputs]
@@ -53,10 +57,10 @@ def image_tensor(inputs, padding=1):
             c_dim = images[0].size(0)
             x_dim = images[0].size(1)
             y_dim = images[0].size(2)
-        else:
-            c_dim = 1
-            x_dim = images[0].size(0)
-            y_dim = images[0].size(1)
+        # else:
+        #     c_dim = 1
+        #     x_dim = images[0].size(0)
+        #     y_dim = images[0].size(1)
 
         result = torch.ones(c_dim,
                             x_dim,
