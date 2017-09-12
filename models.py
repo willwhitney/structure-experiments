@@ -330,16 +330,24 @@ class DeterministicModel(nn.Module):
             'seq_nll': Variable(torch.zeros(1).type(dtype)),
         }
 
-        total_z_dim = self.hidden_dim * len(self.transitions)
-        zero_latent = Variable(torch.zeros(sequence.size(0), 
-                                           total_z_dim)).type(dtype)
-        cat_prior = zero_latent.clone()
+        # if len(sequence) > 1:
+        #     diffs = motion_diffs(sequence)
+        #     pixel_weights = [diff * motion_weight + 1 for diff in diffs]
+        # else:
+        #     ones = Variable(torch.ones(sequence[0].size()).type(dtype))
+        #     pixel_weights = [ones]
+
+        cat_prior = self.z1_prior
         for t in range(len(sequence)):
 
-            inferred_z_post = self.inference(reshaped_sequence[t],
-                                             cat_prior)[0]
+            # give it the sample from z_{t-1}
+            # inferred_z_post = self.inference(reshaped_sequence[t+1], z_sample)
 
-            divergence = mse(inferred_z_post, cat_prior)
+            # give it the mean and logvar2 of the prior p(z_t | z_{t-1})
+            inferred_z_post = self.inference(reshaped_sequence[t],
+                                             cat_prior)
+
+            divergence = KL(inferred_z_post, cat_prior)
             output['seq_divergence'] += divergence
             if math.isnan(output['seq_divergence'].data.sum()):
                 pdb.set_trace()
@@ -348,9 +356,9 @@ class DeterministicModel(nn.Module):
             else:
                 output['seq_trans_div'] += divergence
 
-            output['posterior_variances'].append(zero_latent.clone())
+            output['posterior_variances'].append(inferred_z_post[1])
 
-            
+            z_sample = sample_log2(inferred_z_post)
             gen_dist = self.generator(z_sample)
 
             if opt.loss == 'normal':
