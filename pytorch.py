@@ -237,8 +237,8 @@ while i < opt.max_steps:
         bookkeeper.update(i, output)
 
         nll = output['seq_nll']
-        # seq_divergence = output['seq_divergence']
-        seq_divergence = output['seq_trans_div']
+        seq_divergence = output['seq_divergence']
+        # seq_divergence = output['seq_trans_div']
 
         # accumulate the variances for randomizing and nonrandomizing frames
         if opt.data == 'random_balls':
