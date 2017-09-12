@@ -91,8 +91,7 @@ class LogSquaredGaussianKLD(nn.Module):
         divergences = 0.5 * (a + b + c + d)
         mean = divergences.mean()
         if math.isnan(mean.data[0]) or math.isinf(mean.data[0]):
-            pass
-            # pdb.set_trace()
+            pdb.set_trace()
 
         # pdb.set_trace()
         return mean
@@ -114,8 +113,7 @@ class GaussianLL(nn.Module):
         c = mu.size(1) * math.log(2*math.pi)
         log_likelihoods = -0.5 * (a + b + c)
         if math.isnan(log_likelihoods.data.sum()):
-            pass
-            # pdb.set_trace()
+            pdb.set_trace()
         return log_likelihoods.mean()
 
 class MotionGaussianLL(nn.Module):
@@ -160,7 +158,6 @@ class LogSquaredGaussianLL(nn.Module):
         log_likelihoods = -0.5 * (a + b + c)
         mean = log_likelihoods.mean()
         if math.isnan(mean.data[0]) or math.isinf(mean.data[0]):
-            pass
-            # pdb.set_trace()
+            pdb.set_trace()
 
         return log_likelihoods.mean()
