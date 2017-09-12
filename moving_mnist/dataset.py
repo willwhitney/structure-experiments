@@ -15,11 +15,11 @@ class MovingMNIST(data.Dataset):
         tiny = False
         if train == True:
             self.data_handler = handler(seq_len, image_size)
-            self.data_size = 64 * pow(2, 3) if tiny else 64 * pow(2, 12)
+            self.data_size = 64 * pow(2, 2) if tiny else 64 * pow(2, 12)
             
         else:
             self.data_handler = handler(seq_len, image_size)
-            self.data_size = 64 * pow(2, 3) if tiny else 64 * pow(2, 5)
+            self.data_size = 64 * pow(2, 2) if tiny else 64 * pow(2, 5)
 
         pbar = pb.ProgressBar()
 
