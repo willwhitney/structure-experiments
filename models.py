@@ -113,8 +113,7 @@ class IndependentModel(nn.Module):
                 pdb.set_trace()
             if t == 0:
                 output['seq_prior_div'] += divergence
-            # else:
-            elif t > 1:
+            else:
                 output['seq_trans_div'] += divergence
 
             output['posterior_variances'].append(inferred_z_post[1])
