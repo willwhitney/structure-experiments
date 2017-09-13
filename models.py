@@ -312,6 +312,12 @@ class IndependentModel(nn.Module):
             all_generations.append(current_gen)
         return all_generations
 
+def batch_normalize(a):
+    """ Requires `a` to be 2-dimensional, with dim 0 the batch dim """
+    norms = a.pow(2).sum(1).sqrt()
+    return a / (norms.unsqueeze(1) + 1e-8)
+
+
 class DeterministicModel(nn.Module):
     def __init__(self, n_latents, hidden_dim, img_size,
                  transition=Transition, first_inference=DCGANFirstInference,
@@ -347,7 +353,7 @@ class DeterministicModel(nn.Module):
             z_prior.append(trans(previous))
 
         prediction = torch.cat([prior[0] for prior in z_prior], 1)
-        prediction = prediction / (prediction.norm() + 1e-8)
+        prediction = batch_normalize(prediction)
         return (prediction,
                 Variable(torch.zeros(prediction.size()).type(dtype)))
 
@@ -355,7 +361,7 @@ class DeterministicModel(nn.Module):
         inferred_z = self.inference(observation,
                                     (prior[0].detach(),
                                      prior[1].detach()))[0]
-        return inferred_z / (inferred_z.norm() + 1e-8)
+        return batch_normalize(inferred_z)
 
 
     def forward(self, sequence, motion_weight=0):
@@ -376,13 +382,13 @@ class DeterministicModel(nn.Module):
         cat_prior = self.z1_prior
         for t in range(len(sequence)):
             start_div = 2
-            inferred_z_post = self.inference(reshaped_sequence[t],
+            inferred_z_post = self.infer(reshaped_sequence[t],
                                              (cat_prior[0].detach(),
-                                              cat_prior[1].detach()))[0]
+                                              cat_prior[1].detach()))
 
-            divergence = mse(inferred_z_post, cat_prior[0])
-            output['seq_divergence'] += divergence
+            divergence = 1*mse(inferred_z_post, cat_prior[0])
             if t >= start_div:
+                output['seq_divergence'] += divergence
                 output['seq_trans_div'] += divergence
 
             output['posterior_variances'].append(zero_latent.clone())
@@ -422,10 +428,10 @@ class DeterministicModel(nn.Module):
         generations = torch.Tensor(steps, opt.batch_size, *self.image_dim)
         generations[:priming_steps].copy_(torch.stack(priming).data)
 
-        latent = self.inference(priming[0], self.z1_prior)[0]
+        latent = self.infer(priming[0], self.z1_prior)
         for t in range(1, priming_steps):
-            latent = self.inference(priming[t],
-                                    self.predict_latent(latent))[0]
+            latent = self.infer(priming[t],
+                                    self.predict_latent(latent))
 
         for t in range(steps - priming_steps):
             # make a transition
@@ -442,10 +448,10 @@ class DeterministicModel(nn.Module):
                                    *self.image_dim)
         generations[:, :priming_steps].copy_(torch.stack(priming).data)
 
-        latent = self.inference(priming[0], self.z1_prior)[0]
+        latent = self.infer(priming[0], self.z1_prior)
         for t in range(1, priming_steps):
-            latent = self.inference(priming[t],
-                                    self.predict_latent(latent))[0]
+            latent = self.infer(priming[t],
+                                    self.predict_latent(latent))
 
         starting_latent = latent.clone()
         for z_i in range(self.n_latents):
@@ -459,7 +465,7 @@ class DeterministicModel(nn.Module):
                 new_z = predicted_z[0]
                 latent[:, z_i*self.hidden_dim :
                             (z_i+1)*self.hidden_dim] = new_z
-
+                latent = batch_normalize(latent)
                 generated_frame = self.generator(latent)[0].data
                 generations[z_i, t + priming_steps].copy_(generated_frame)
         return generations
@@ -471,10 +477,10 @@ class DeterministicModel(nn.Module):
                            *self.image_dim)
         generations[:, :priming_steps].copy_(torch.stack(priming).data)
 
-        latent = self.inference(priming[0], self.z1_prior)[0]
+        latent = self.infer(priming[0], self.z1_prior)
         for t in range(1, priming_steps):
-            latent = self.inference(priming[t],
-                                    self.predict_latent(latent))[0]
+            latent = self.infer(priming[t],
+                                    self.predict_latent(latent))
 
         z_const = latent.clone()
         noise = Variable(torch.zeros(
@@ -492,6 +498,8 @@ class DeterministicModel(nn.Module):
                 new_z = single_z_const + alpha * noise
                 latent[:, z_i*self.hidden_dim :
                           (z_i+1)*self.hidden_dim] = new_z
+
+                latent = batch_normalize(latent)
                 generated_frame = self.generator(latent)[0].data
                 generations[z_i, t + priming_steps].copy_(generated_frame)
         return generations
@@ -503,16 +511,16 @@ class DeterministicModel(nn.Module):
         posteriors = []
         posterior_generations = []
 
-        inferred_z_post = self.inference(sequence[0], self.z1_prior)
+        inferred_z_post = self.infer(sequence[0], self.z1_prior)
         for t in range(len(sequence)):
-            posteriors.append(inferred_z_post[0])
-            z_sample = inferred_z_post[0]
+            posteriors.append(inferred_z_post)
+            z_sample = inferred_z_post
             gen_dist = self.generator(z_sample)
             posterior_generations.append(gen_dist[0].cpu())
 
             if t < len(sequence) - 1:
                 cat_prior = self.predict_latent(z_sample)
-                inferred_z_post = self.inference(sequence[t+1],
+                inferred_z_post = self.infer(sequence[t+1],
                                                  cat_prior)
 
         priming_steps = 2
@@ -526,6 +534,7 @@ class DeterministicModel(nn.Module):
             for t in range(priming_steps, len(sequence)):
                 z[:, start : end].data.copy_(
                         posteriors[t].data[:, start : end])
+                z = batch_normalize(z)
                 gen_dist = self.generator(z)
                 current_gen.append(gen_dist[0].cpu())
             all_generations.append(current_gen)
