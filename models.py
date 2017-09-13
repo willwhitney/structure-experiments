@@ -107,8 +107,7 @@ class IndependentModel(nn.Module):
 
             # give it the mean and logvar2 of the prior p(z_t | z_{t-1})
             inferred_z_post = self.inference(reshaped_sequence[t],
-                                             (cat_prior[0].detach(),
-                                              cat_prior[1].detach()))
+                                             cat_prior)
 
             divergence = KL(inferred_z_post, cat_prior)
             output['seq_divergence'] += divergence
@@ -200,7 +199,7 @@ class IndependentModel(nn.Module):
             trans = self.transitions[z_i]
             for t in range(steps - priming_steps):
                 previous = latent[:,
-                                  z_i*self.hidden_dim :
+                                  z_i*self.hidden_dim : 
                                   (z_i+1)*self.hidden_dim].clone()
                 predicted_z = trans(previous)
 
@@ -208,7 +207,7 @@ class IndependentModel(nn.Module):
                     new_z = sample_log2(predicted_z)
                 else:
                     new_z = predicted_z[0]
-                latent[:, z_i*self.hidden_dim :
+                latent[:, z_i*self.hidden_dim : 
                             (z_i+1)*self.hidden_dim] = new_z
 
                 generated_frame = self.generator(latent)[0].data
@@ -235,7 +234,7 @@ class IndependentModel(nn.Module):
         for z_i in range(self.n_latents):
             latent = starting_latent.clone()
             for t in range(steps - priming_steps):
-                latent[:, z_i*self.hidden_dim :
+                latent[:, z_i*self.hidden_dim : 
                           (z_i+1)*self.hidden_dim].data.normal_(0, 1)
 
                 generated_frame = self.generator(latent)[0].data
@@ -266,13 +265,13 @@ class IndependentModel(nn.Module):
 
         for z_i in range(self.n_latents):
             latent = z_const.clone()
-            single_z_const = z_const[:, z_i*self.hidden_dim :
+            single_z_const = z_const[:, z_i*self.hidden_dim : 
                                         (z_i+1)*self.hidden_dim]
 
             for t, alpha in enumerate(torch.linspace(
                                         -1, 1, steps - priming_steps)):
                 new_z = single_z_const + alpha * noise
-                latent[:, z_i*self.hidden_dim :
+                latent[:, z_i*self.hidden_dim : 
                           (z_i+1)*self.hidden_dim] = new_z
                 generated_frame = self.generator(latent)[0].data
                 generations[z_i, t + priming_steps].copy_(generated_frame)
@@ -326,6 +325,8 @@ class DeterministicModel(nn.Module):
 
         total_z_dim = n_latents * self.hidden_dim
 
+        
+
         self.transitions = nn.ModuleList([transition(self.hidden_dim,
                                                      layers=opt.trans_layers)
                                           for _ in range(n_latents)])
@@ -357,7 +358,7 @@ class DeterministicModel(nn.Module):
         }
 
         total_z_dim = self.hidden_dim * len(self.transitions)
-        zero_latent = Variable(torch.zeros(sequence.size(0),
+        zero_latent = Variable(torch.zeros(sequence.size(0), 
                                            total_z_dim)).type(dtype)
         cat_prior = zero_latent.clone()
         for t in range(len(sequence)):
@@ -376,7 +377,7 @@ class DeterministicModel(nn.Module):
 
             output['posterior_variances'].append(zero_latent.clone())
 
-
+            
             gen_dist = self.generator(z_sample)
 
             if opt.loss == 'normal':
@@ -446,7 +447,7 @@ class DeterministicModel(nn.Module):
             trans = self.transitions[z_i]
             for t in range(steps - priming_steps):
                 previous = latent[:,
-                                  z_i*self.hidden_dim :
+                                  z_i*self.hidden_dim : 
                                   (z_i+1)*self.hidden_dim].clone()
                 predicted_z = trans(previous)
 
@@ -454,7 +455,7 @@ class DeterministicModel(nn.Module):
                     new_z = sample_log2(predicted_z)
                 else:
                     new_z = predicted_z[0]
-                latent[:, z_i*self.hidden_dim :
+                latent[:, z_i*self.hidden_dim : 
                             (z_i+1)*self.hidden_dim] = new_z
 
                 generated_frame = self.generator(latent)[0].data
@@ -477,7 +478,7 @@ class DeterministicModel(nn.Module):
         for z_i in range(self.n_latents):
             latent = starting_latent.clone()
             for t in range(steps - priming_steps):
-                latent[:, z_i*self.hidden_dim :
+                latent[:, z_i*self.hidden_dim : 
                           (z_i+1)*self.hidden_dim].data.normal_(0, 1)
 
                 generated_frame = self.generator(latent)[0].data
@@ -503,13 +504,13 @@ class DeterministicModel(nn.Module):
 
         for z_i in range(self.n_latents):
             latent = z_const.clone()
-            single_z_const = z_const[:, z_i*self.hidden_dim :
+            single_z_const = z_const[:, z_i*self.hidden_dim : 
                                         (z_i+1)*self.hidden_dim]
 
             for t, alpha in enumerate(torch.linspace(
                                         -1, 1, steps - priming_steps)):
                 new_z = single_z_const + alpha * noise
-                latent[:, z_i*self.hidden_dim :
+                latent[:, z_i*self.hidden_dim : 
                           (z_i+1)*self.hidden_dim] = new_z
                 generated_frame = self.generator(latent)[0].data
                 generations[z_i, t + priming_steps].copy_(generated_frame)
@@ -673,7 +674,7 @@ class VAEModel(nn.Module):
 
         reshaped_sequence = sequence
         if isinstance(self.inference, ConvInference):
-            reshaped_sequence = [x.resize(x.size(0),
+            reshaped_sequence = [x.resize(x.size(0), 
                                           3, self.img_size, self.img_size)
                                  for x in sequence]
         # reshaped_sequence = [x.resize(x.size(0), self.img_size, self.img_size, 3)
