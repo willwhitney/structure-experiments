@@ -53,8 +53,11 @@ class IndependentModel(nn.Module):
 
         total_z_dim = n_latents * self.hidden_dim
 
+<<<<<<< eabce2b76cacf74a21910366a6ccc2775903473b
 
 
+=======
+>>>>>>> Experiment: mmnist-multi-ae-stopgrad-ld200-bce
         self.transitions = nn.ModuleList([transition(self.hidden_dim,
                                                      layers=opt.trans_layers)
                                           for _ in range(n_latents)])
