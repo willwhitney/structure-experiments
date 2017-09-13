@@ -82,7 +82,7 @@ def load_dataset(opt):
             data_path = '/speedy/data/' + opt.data
             # data_path = '/speedy/data/urban/5th_ave'
         else:
-            data_path = '/misc/vlgscratch4/FergusGroup/wwhitney/' + opt.data
+            data_path = '/misc/vlgscratch3/FergusGroup/wwhitney/' + opt.data
             # data_path = '/misc/vlgscratch3/FergusGroup/wwhitney/urban/5th_ave'
 
         if opt.data == 'sample':
@@ -100,10 +100,10 @@ def load_dataset(opt):
             test_data = data_checkpoint['test_data']
 
             if train_data.image_size[1] != opt.image_width:
-                train_data.resize_([train_data.image_size[0],
+                train_data.resize_([train_data.image_size[0], 
                                     opt.image_width,
                                     opt.image_width])
-                test_data.resize_([test_data.image_size[0],
+                test_data.resize_([test_data.image_size[0], 
                                    opt.image_width,
                                    opt.image_width])
 
@@ -151,24 +151,15 @@ def load_dataset(opt):
                     transforms.ToTensor()]))
             load_workers = 1
 
-        elif opt.data == 'mmnist':
-            dataset_name = "channels{}_width{}_seqlen{}.t7".format(
-                opt.channels, opt.image_width, opt.seq_len)
-            dataset_path = os.path.join(data_path, dataset_name)
-
-            if os.path.exists(dataset_path):
-                data_cp = torch.load(dataset_path)
-                train_data = data_cp['train']
-                test_data = data_cp['test']
-            else:
-                train_data = MovingMNIST(train=True,
-                                         seq_len=opt.seq_len,
-                                         image_size=opt.image_width,
-                                         colored=(opt.channels == 3))
-                test_data = MovingMNIST(train=False,
-                                         seq_len=opt.seq_len,
-                                         image_size=opt.image_width,
-                                         colored=(opt.channels == 3))
+        elif opt.data == 'moving-mnist':
+            train_data = MovingMNIST(train=True, 
+                                     seq_len=opt.seq_len,
+                                     image_size=opt.image_width,
+                                     colored=(opt.channels == 3))
+            test_data = MovingMNIST(train=False, 
+                                     seq_len=opt.seq_len,
+                                     image_size=opt.image_width,
+                                     colored=(opt.channels == 3))
             load_workers = 1
 
         # other video datasets are big and stored as chunks
@@ -202,7 +193,7 @@ def load_dataset(opt):
 def normalize_data(opt, dtype, sequence):
     if opt.data == 'mnist':
         sequence = [sequence[0]]
-    elif opt.data == 'mmnist':
+    elif opt.data == 'moving-mnist':
         sequence.transpose_(0, 1)
         if opt.channels > 1:
             sequence.transpose_(3, 4).transpose_(2, 3)
