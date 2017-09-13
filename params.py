@@ -19,6 +19,7 @@ else:
 parser = argparse.ArgumentParser()
 parser.add_argument('--name', default=get_gpu())
 parser.add_argument('--sanity', action="store_true")
+parser.add_argument('--model', default='independent')
 
 parser.add_argument('--commit', dest='commit', action='store_true')
 parser.add_argument('--no-commit', dest='commit', action='store_false')
