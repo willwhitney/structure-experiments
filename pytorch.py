@@ -38,14 +38,9 @@ random.seed(opt.seed)
 if opt.load is not None:
     i, model = load_checkpoint(opt)
 else:
-    if opt.model == 'independent':
-        modeltype = IndependentModel
-    elif opt.model == 'deterministic':
-        modeltype = DeterministicModel
-
     i = 0
     if opt.tiny:
-        model = modeltype(opt.latents,
+        model = IndependentModel(opt.latents,
                                  opt.latent_dim,
                                  opt.image_width,
                                  transition=Transition,
@@ -53,7 +48,7 @@ else:
                                  inference=TinyDCGANInference,
                                  generator=TinyDCGANGenerator).type(dtype)
     else:
-        model = modeltype(opt.latents,
+        model = IndependentModel(opt.latents,
                                  opt.latent_dim,
                                  opt.image_width).type(dtype)
 
@@ -146,16 +141,16 @@ def update_reducer(step, state, updates):
     q_vars = updates['posterior_variances']
 
     state['q_var_means'].append(mean_of_means(q_vars))
-    state['q_var_min'] = min(*[v.data.min() for v in q_vars],
+    state['q_var_min'] = min(*[v.data.min() for v in q_vars], 
                              state['q_var_min'])
-    state['q_var_max'] = max(*[v.data.max() for v in q_vars],
+    state['q_var_max'] = max(*[v.data.max() for v in q_vars], 
                              state['q_var_max'])
 
     if opt.seq_len > 1:
         state['p_var_means'].append(mean_of_means(p_vars))
-        state['p_var_min'] = min(*[v.data.min() for v in p_vars],
+        state['p_var_min'] = min(*[v.data.min() for v in p_vars], 
                                  state['p_var_min'])
-        state['p_var_max'] = max(*[v.data.max() for v in p_vars],
+        state['p_var_max'] = max(*[v.data.max() for v in p_vars], 
                                  state['p_var_max'])
 
 def make_log(step, state):
@@ -171,17 +166,17 @@ def make_log(step, state):
         p_var_mean = sum(state['p_var_means']) / len(state['p_var_means'])
     else:
         p_var_mean = 0
-
+   
     log_values = (step,
                   state['mean_loss'] / batches,
                   state['mean_nll'] / batches,
                   state['mean_divergence'] / batches,
                   state['mean_prior_div'] / batches,
                   state['mean_trans_div'] / batches,
-                  state['q_var_min'],
+                  state['q_var_min'], 
                   q_var_mean,
                   state['q_var_max'],
-                  state['p_var_min'],
+                  state['p_var_min'], 
                   p_var_mean,
                   state['p_var_max'],
                   # mean_grad_norm / batches,
@@ -217,7 +212,7 @@ def save_checkpoint(step, state):
 
 def make_covariance(step, state):
     if opt.seq_len > 1:
-        construct_covariance(opt.save + '/covariance/',
+        construct_covariance(opt.save + '/covariance/', 
                              model, train_loader, 10,
                              label="train_" + str(step))
         construct_covariance(opt.save + '/covariance/',
