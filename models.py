@@ -380,7 +380,7 @@ class DeterministicModel(nn.Module):
                                              (cat_prior[0].detach(),
                                               cat_prior[1].detach()))[0]
 
-            divergence = 5*mse(inferred_z_post, cat_prior[0])
+            divergence = mse(inferred_z_post, cat_prior[0])
             output['seq_divergence'] += divergence
             if t >= start_div:
                 output['seq_trans_div'] += divergence
