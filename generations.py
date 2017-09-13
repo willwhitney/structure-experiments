@@ -39,8 +39,6 @@ def save_posterior(path, model, sequence, generations):
 
 @ensure_path_exists
 def save_generations(path, model, priming, sampling=True):
-    if sampling and isinstance(model, DeterministicModel):
-        return
     for p in priming:
         p.volatile = True
 
@@ -53,8 +51,6 @@ def save_generations(path, model, priming, sampling=True):
 
 @ensure_path_exists
 def save_z1_samples(path, model):
-    if isinstance(model, DeterministicModel):
-        return
     # save samples from the first-frame prior
     if not isinstance(model, MSEModel):
         prior_sample = sample_log2(model.z1_prior)
@@ -93,8 +89,6 @@ def extract_kth_sequence(full_sequence, k):
 
 @ensure_path_exists
 def save_independent_gen(path, model, priming, sampling=True):
-    if sampling and isinstance(model, DeterministicModel):
-        return
     for p in priming:
         p.volatile = True
 
@@ -114,8 +108,6 @@ def save_independent_gen(path, model, priming, sampling=True):
 
 @ensure_path_exists
 def save_independent_resample(path, model, priming):
-    if isinstance(model, DeterministicModel):
-        return
     for p in priming:
         p.volatile = True
 
