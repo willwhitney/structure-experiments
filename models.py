@@ -62,11 +62,13 @@ class IndependentModel(nn.Module):
         self.inference = inference(self.image_dim, total_z_dim)
         self.generator = generator(total_z_dim, self.image_dim)
 
-    def predict_latent(self, latent):
+    def predict_latent(self, latents):
+        (latent1, latent2) = latents
         z_prior = []
         for i, trans in enumerate(self.transitions):
-            previous = latent[:, i*self.hidden_dim : (i+1)*self.hidden_dim]
-            z_prior.append(trans(previous))
+            previous1 = latent1[:, i*self.hidden_dim : (i+1)*self.hidden_dim]
+            previous2 = latent2[:, i*self.hidden_dim : (i+1)*self.hidden_dim]
+            z_prior.append(trans(previous1, previous2))
 
         cat_prior = (torch.cat([prior[0] for prior in z_prior], 1),
                      torch.cat([prior[1] for prior in z_prior], 1))
@@ -94,6 +96,7 @@ class IndependentModel(nn.Module):
         #     pixel_weights = [ones]
 
         cat_prior = self.z1_prior
+        latents = [cat_prior]
         for t in range(len(sequence)):
 
             # give it the sample from z_{t-1}
@@ -116,6 +119,7 @@ class IndependentModel(nn.Module):
             output['posterior_variances'].append(inferred_z_post[1])
 
             z_sample = sample_log2(inferred_z_post)
+            latents.append(z_sample)
             gen_dist = self.generator(z_sample)
 
             if opt.loss == 'normal':
@@ -134,7 +138,7 @@ class IndependentModel(nn.Module):
             output['generations'].append(gen_dist)
 
             if t < len(sequence) - 1:
-                cat_prior = self.predict_latent(z_sample)
+                cat_prior = self.predict_latent((latents[-2], z_sample))
                 output['prior_variances'].append(cat_prior[1])
 
         output['seq_nll'] /= len(sequence)
@@ -150,14 +154,18 @@ class IndependentModel(nn.Module):
         generations = torch.Tensor(steps, opt.batch_size, *self.image_dim)
         generations[:priming_steps].copy_(torch.stack(priming).data)
 
+        latents = [self.z1_prior]
         latent = self.inference(priming[0], self.z1_prior)[0]
         for t in range(1, priming_steps):
+            latents.append(latent)
             latent = self.inference(priming[t],
-                                    self.predict_latent(latent))[0]
+                                    self.predict_latent((latents[-2],
+                                                         latent)))[0]
 
         for t in range(steps - priming_steps):
             # make a transition
-            latent_dist = self.predict_latent(latent)
+            latents.append(latent)
+            latent_dist = self.predict_latent(latents[-2], latent)
 
             if sampling:
                 latent = sample_log2(latent_dist)
@@ -174,10 +182,13 @@ class IndependentModel(nn.Module):
                                    *self.image_dim)
         generations[:, :priming_steps].copy_(torch.stack(priming).data)
 
+        latents = [self.z1_prior]
         latent = self.inference(priming[0], self.z1_prior)[0]
         for t in range(1, priming_steps):
+            latents.append(latent)
             latent = self.inference(priming[t],
-                                    self.predict_latent(latent))[0]
+                                    self.predict_latent((latents[-2],
+                                                         latent)))[0]
 
         starting_latent = latent.clone()
         for z_i in range(self.n_latents):
@@ -207,10 +218,14 @@ class IndependentModel(nn.Module):
                            *self.image_dim)
         generations[:, :priming_steps].copy_(torch.stack(priming).data)
 
+        latents = [self.z1_prior]
         latent = self.inference(priming[0], self.z1_prior)[0]
         for t in range(1, priming_steps):
+            latents.append(latent)
             latent = self.inference(priming[t],
-                                    self.predict_latent(latent))[0]
+                                    self.predict_latent((latents[-2],
+                                                         latent)))[0]
+
 
         starting_latent = latent.clone()
         for z_i in range(self.n_latents):
@@ -229,10 +244,15 @@ class IndependentModel(nn.Module):
         generations = torch.Tensor(self.n_latents, steps, opt.batch_size,
                            *self.image_dim)
         generations[:, :priming_steps].copy_(torch.stack(priming).data)
+
+        latents = [self.z1_prior]
         latent = self.inference(priming[0], self.z1_prior)[0]
         for t in range(1, priming_steps):
+            latents.append(latent)
             latent = self.inference(priming[t],
-                                    self.predict_latent(latent))[0]
+                                    self.predict_latent((latents[-2],
+                                                         latent)))[0]
+
 
         z_const = latent.clone()
         noise = Variable(torch.zeros(
@@ -262,15 +282,16 @@ class IndependentModel(nn.Module):
         posterior_generations = []
         inferred_z_post = self.inference(sequence[0], self.z1_prior)
 
-        cat_prior = self.z1_prior
+        latents = [self.z1_prior]
         for t in range(len(sequence)):
             posteriors.append(inferred_z_post[0])
             z_sample = inferred_z_post[0]
+            latents.append(z_sample)
             gen_dist = self.generator(z_sample)
             posterior_generations.append(gen_dist[0].cpu())
 
             if t < len(sequence) - 1:
-                cat_prior = self.predict_latent(z_sample)
+                cat_prior = self.predict_latent((latents[-2], z_sample))
                 inferred_z_post = self.inference(sequence[t+1],
                                                  cat_prior)
 

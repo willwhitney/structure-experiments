@@ -30,6 +30,8 @@ class Transition(nn.Module):
         super(Transition, self).__init__()
         self.dim = hidden_dim
 
+        self.input_lin = nn.Linear(self.dim * 2, self.dim)
+
         self.layers = nn.ModuleList([nn.Linear(self.dim, self.dim)
                                      for _ in range(layers)])
         # self.layers = nn.ModuleList([nn.Linear(self.dim, self.dim)
@@ -39,14 +41,15 @@ class Transition(nn.Module):
         self.lin_mu = nn.Linear(self.dim, self.dim)
         self.lin_sigma = nn.Linear(self.dim, self.dim)
 
-    def forward(self, input):
-        current = input
+    def forward(self, inputs):
+        current = self.input_lin(torch.cat(inputs, 1))
+        current = activation(current)
         for layer in self.layers:
             current = layer(current)
             current = activation(current)
 
         # hidden = F.tanh(self.l1(input))
-        
+
         mu = self.lin_mu(current)
         sigma = self.lin_sigma(current)
         # sigma = self.lin_sigma(current).clamp(min=-4.605170186) # 0.1
