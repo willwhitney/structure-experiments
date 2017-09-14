@@ -97,6 +97,13 @@ def save_gif(filename, inputs, bounce=False, duration=0.2):
         images = images + list(reversed(images[1:-1]))
     imageio.mimsave(filename, images, duration=duration)
 
+def show(img_tensor):
+    output_tensor = img_tensor.transpose(0,1).transpose(1,2)
+    f = plt.figure()
+    plt.imshow(output_tensor.numpy())
+    plt.show()
+    plt.close(f)
+
 
 def clip_grad_norm(parameters, max_norm, norm_type=2):
     """Clips gradient norm of an iterable of parameters.
@@ -261,13 +268,6 @@ def set_lr(optimizer, lr):
 # def jupyter_show(tensor):
     # plt.figure()
     # return plt.imshow(tensor.numpy())
-
-def show(img_tensor):
-    output_tensor = img_tensor.transpose(0,1).transpose(1,2)
-    f = plt.figure()
-    plt.imshow(output_tensor.numpy())
-    plt.show()
-    plt.close(f)
 
 def setattrs(obj, attr_dict, exceptions=[]):
     for key in attr_dict:
