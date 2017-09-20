@@ -119,7 +119,7 @@ class IndependentModel(nn.Module):
             output['posterior_variances'].append(inferred_z_post[1])
 
             z_sample = sample_log2(inferred_z_post)
-            latents.append(inferred_z_post[0])
+            latents.append(z_sample)
             gen_dist = self.generator(z_sample)
 
             if opt.loss == 'normal':
@@ -139,7 +139,7 @@ class IndependentModel(nn.Module):
 
             if t < len(sequence) - 1:
                 if t >= start_div - 1:
-                    cat_prior = self.predict_latent((latents[-2], latents[-1]))
+                    cat_prior = self.predict_latent((latents[-2], z_sample))
                     output['prior_variances'].append(cat_prior[1])
                 else:
                     cat_prior = self.z1_prior
