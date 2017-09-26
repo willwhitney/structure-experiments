@@ -3,7 +3,6 @@ from util import *
 from params import *
 from models import *
 import os
-import ipdb
 
 def save_all_generations(step, model, sequence, generations):
     # volatile input -> no saved intermediate values
@@ -37,13 +36,6 @@ def save_posterior(path, model, sequence, generations):
         mus = [x[j] for x in mus_data]
         truth = [x[j] for x in seq_data]
         save_tensors_image(path + str(j) + '.png', [truth, mus])
-
-@ensure_path_exists
-def save_paired_sequence(path, s1, s2):
-    for j in range(5):
-        save_tensors_image(path + str(j) + '.png',
-                           [[x[j].data for x in s1],
-                            [x[j].data for x in s2]])
 
 @ensure_path_exists
 def save_generations(path, model, priming, sampling=True):
