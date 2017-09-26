@@ -1,14 +1,8 @@
 import torch
 import socket
 import argparse
-import json
-import glob
-import os
 
-from atari_dataset import AtariData
-from video_dataset import *
-from env import *
-from util import *
+from util import get_gpu
 
 hostname = socket.gethostname()
 if socket.gethostname().find('touchy') >= 0:
@@ -64,7 +58,7 @@ parser.add_argument('--activation', default="selu")
 parser.add_argument('--kl-anneal-end', default=3e6, type=float)
 parser.add_argument('--kl-weight', default=1, type=int)
 parser.add_argument('--output-var', default=0.01, type=float)
-parser.add_argument('--latents', default=3, type=int)
+parser.add_argument('--latents', default=2, type=int)
 parser.add_argument('--latent-dim', default=25, type=int)
 parser.add_argument('--trans-layers', default=4, type=int)
 parser.add_argument('--tiny', action="store_true")
