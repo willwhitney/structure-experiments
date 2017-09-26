@@ -3,8 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 
-import traceback
-
 from util import *
 from modules import *
 from params import *
@@ -16,199 +14,24 @@ LL = GaussianLL().type(dtype)
 bce = nn.BCELoss().type(dtype)
 bce.size_average = False
 
-mse_loss = nn.MSELoss().type(dtype)
-bce_loss = nn.BCELoss().type(dtype)
-
-
 def mse(a, b):
     return sum([(a[i] - b[i]).norm()**2 for i in range(len(a))]) / len(a)
-
 
 def motion_diffs(sequence):
     if len(sequence) == 1:
         return Variable(torch.zeros(sequence[0].size()))
     forward_diffs = []
     for t in range(len(sequence) - 1):
-        diff = torch.gt(torch.abs(sequence[t] - sequence[t + 1]), 0.05)
+        diff = torch.gt(torch.abs(sequence[t] - sequence[t+1]), 0.05)
         forward_diffs.append(diff)
 
     bidirectional_diffs = [forward_diffs[0]]
     for t in range(1, len(sequence) - 1):
-        sum_diff = torch.max(forward_diffs[t - 1], forward_diffs[t])
+        sum_diff = torch.max(forward_diffs[t-1], forward_diffs[t])
         bidirectional_diffs.append(sum_diff)
     bidirectional_diffs.append(forward_diffs[-1])
     float_diffs = [diff.float() for diff in bidirectional_diffs]
     return float_diffs
-
-
-class Autoencoder(nn.Module):
-    def __init__(self, hidden_dim, img_size,
-                 inference=DCGANFirstInference, generator=DCGANGenerator):
-        super().__init__()
-        self.hidden_dim = hidden_dim
-        self.image_dim = [opt.channels, img_size, img_size]
-
-        self.inference = inference(self.image_dim, self.hidden_dim)
-        self.generator = generator(self.hidden_dim, self.image_dim)
-
-    def forward(self, x):
-        latents = self.inference(x)
-        reconstruction = self.generator(latents)
-        reconstruction_loss = mse_loss(reconstruction, x)
-
-        return reconstruction_loss, latents, reconstruction
-
-
-def batch_select(x, latent_dim, start=None, end=None):
-    start_loc = None if start is None else start * latent_dim
-    end_loc = None if end is None else (end+1) * latent_dim
-
-    try:
-        result = x[:, start_loc: end_loc]
-    except ValueError as e:
-        return Variable().type(dtype)
-
-    return result
-
-def batch_select_all_but(x, latent_dim, index_to_skip):
-    selected = [batch_select(x, latent_dim, end=index_to_skip - 1),
-                batch_select(x, latent_dim, start=index_to_skip + 1)]
-    selected = [s for s in selected if len(s) > 0]
-    return torch.cat(selected, 1)
-
-def batch_replace(latents, latent, latent_dim, index_to_replace):
-    selected = [
-        batch_select(latents, latent_dim, end=index_to_replace - 1),
-        latent,
-        batch_select(latents, latent_dim, start=index_to_replace + 1),
-    ]
-    selected = [s for s in selected if len(s) > 0]
-    return torch.cat(selected, 1)
-
-
-
-class IndependenceAdversary(nn.Module):
-    def __init__(self, factors, latent_dim):
-        super().__init__()
-        self.latent_dim = latent_dim
-        self.factors = factors
-        # self.adversary01 = Adversary(latent_dim * 2, latent_dim)
-        # self.adversary10 = Adversary(latent_dim * 2, latent_dim)
-
-        # adversary i attempts to predict whether z^i_1 is valid
-        # given the values of z^{[0..i) U (i, factors]}_0, i.e.
-        # the value of every other factor at timestep 0
-        self.adversaries = nn.ModuleList(
-            [Adversary(latent_dim * factors, latent_dim, n_layers=4)
-             for _ in range(factors)])
-
-    def forward(self, latents0, latents1, latents_bar):
-        outputs = {
-            'true_loss': None,
-            'false_loss': None,
-            'true_outputs': None,
-            'false_outputs': None,
-        }
-
-        true_outputs = self.infer(latents0, latents1)        
-        stacked_true_outputs = torch.cat(true_outputs, 0)
-        true_target = Variable(torch.ones(stacked_true_outputs.size()))
-        true_target = true_target.type(dtype)
-        outputs['true_loss'] = bce_loss(stacked_true_outputs, true_target)
-
-        false_outputs = self.infer(latents0, latents_bar)
-        stacked_false_outputs = torch.cat(false_outputs, 0)
-        false_target = Variable(torch.zeros(stacked_false_outputs.size()))
-        false_target = false_target.type(dtype)
-        outputs['false_loss'] = bce_loss(stacked_false_outputs, false_target)
-
-        outputs['true_outputs'] = stacked_true_outputs
-        outputs['false_outputs'] = stacked_false_outputs
-        return outputs
-
-    def infer(self, latents0, latents1):
-        outputs = []
-        for i, adversary in enumerate(self.adversaries):
-            inputs = [
-                batch_select(latents0, self.latent_dim, end=i-1),
-                batch_select(latents0, self.latent_dim, start=i+1),
-                batch_select(latents1, self.latent_dim, start=i, end=i),
-            ]
-            inputs = [x for x in inputs if len(x) > 0]
-            stacked_input = torch.cat(inputs, 1)
-
-            output = adversary(stacked_input)
-            outputs.append(output)
-        return outputs
-
-            
-class IndependentAutoencoder(nn.Module):
-    def __init__(self, n_latents, latent_dim, img_size, adversary,
-                 inference=DCGANFirstInference, generator=DCGANGenerator):
-        super().__init__()
-        self.n_latents = n_latents
-        self.latent_dim = latent_dim
-        self.image_dim = [opt.channels, img_size, img_size]
-
-        self.adversary = adversary
-
-        total_z_dim = n_latents * latent_dim
-
-        self.inference = inference(self.image_dim, total_z_dim)
-        self.generator = generator(total_z_dim, self.image_dim)
-
-    def forward(self, xs):
-        output = {
-            'reconstruction_loss': None,
-            'adversarial_loss': None,
-            'latents0': None,
-            'latents1': None,
-            'reconstruction': None,
-        }
-
-        x = torch.cat(xs, 0)
-        latents = self.inference(x)
-        latents0 = latents[:xs[0].size(0)]
-        latents1 = latents[xs[0].size(0):]
-
-        reconstruction = self.generator(latents)
-        output['reconstruction_loss'] = mse_loss(reconstruction, x)
-
-        adversary_outputs = self.adversary.infer(latents0, latents1)
-        stacked_adversary_outputs = torch.cat(adversary_outputs, 0)
-        adversary_targets = torch.Tensor(stacked_adversary_outputs.size())
-        adversary_targets = Variable(adversary_targets.fill_(0.5).type(dtype))
-
-        output['adversarial_loss'] = bce_loss(stacked_adversary_outputs,
-                                            adversary_targets)
-        output['latents0'] = latents0.detach()
-        output['latents1'] = latents1.detach()
-        output['reconstruction'] = reconstruction
-
-        return output
-
-    def generate_independent_posterior(self, sequence):
-        latents = [self.inference(s) for s in sequence]
-        l0 = latents[0]
-
-        posterior_generations = [self.generator(latent) for latent in latents]
-        all_generations = [posterior_generations]
-        for l in range(self.n_latents):
-            generations_l = [posterior_generations[0]]
-            for i in range(1, len(sequence)):
-                new_latent_l = batch_select(
-                    latents[i], self.latent_dim, start=l, end=l)
-                new_latents = batch_replace(
-                    l0, new_latent_l, self.latent_dim, l)
-                generations_l.append(self.generator(new_latents))
-            all_generations.append(generations_l)
-
-        return all_generations
-        
-
-
-
-
 
 class IndependentModel(nn.Module):
     def __init__(self, n_latents, hidden_dim, img_size,
@@ -243,10 +66,8 @@ class IndependentModel(nn.Module):
         (latent1, latent2) = latents
         z_prior = []
         for i, trans in enumerate(self.transitions):
-            previous1 = latent1[:, i *
-                                self.hidden_dim: (i + 1) * self.hidden_dim]
-            previous2 = latent2[:, i *
-                                self.hidden_dim: (i + 1) * self.hidden_dim]
+            previous1 = latent1[:, i*self.hidden_dim : (i+1)*self.hidden_dim]
+            previous2 = latent2[:, i*self.hidden_dim : (i+1)*self.hidden_dim]
             z_prior.append(trans((previous1, previous2)))
 
         cat_prior = (torch.cat([prior[0] for prior in z_prior], 1),
@@ -306,7 +127,7 @@ class IndependentModel(nn.Module):
                                     reshaped_sequence[t])
             elif opt.loss == 'bce':
                 log_likelihood = -bce(gen_dist[0], reshaped_sequence[t]) / \
-                    sequence[0].size(0)
+                                  sequence[0].size(0)
             else:
                 raise Exception('Invalid loss function.')
 
@@ -380,11 +201,11 @@ class IndependentModel(nn.Module):
             trans = self.transitions[z_i]
             for t in range(steps - priming_steps):
                 previous1 = latent1[:,
-                                    z_i * self.hidden_dim:
-                                    (z_i + 1) * self.hidden_dim].clone()
+                                  z_i*self.hidden_dim :
+                                  (z_i+1)*self.hidden_dim].clone()
                 previous2 = latent2[:,
-                                    z_i * self.hidden_dim:
-                                    (z_i + 1) * self.hidden_dim].clone()
+                                  z_i*self.hidden_dim :
+                                  (z_i+1)*self.hidden_dim].clone()
                 predicted_z = trans((previous1, previous2))
 
                 if sampling:
@@ -392,8 +213,8 @@ class IndependentModel(nn.Module):
                 else:
                     new_z = predicted_z[0]
                 latent1 = latent2.clone()
-                latent2[:, z_i * self.hidden_dim:
-                        (z_i + 1) * self.hidden_dim] = new_z
+                latent2[:, z_i*self.hidden_dim :
+                            (z_i+1)*self.hidden_dim] = new_z
 
                 generated_frame = self.generator(latent2)[0].data
                 generations[z_i, t + priming_steps].copy_(generated_frame)
@@ -403,7 +224,7 @@ class IndependentModel(nn.Module):
         priming_steps = len(priming)
 
         generations = torch.Tensor(self.n_latents, steps, opt.batch_size,
-                                   *self.image_dim)
+                           *self.image_dim)
         generations[:, :priming_steps].copy_(torch.stack(priming).data)
 
         latents = [self.z1_prior[0]]
@@ -414,12 +235,13 @@ class IndependentModel(nn.Module):
                                     self.predict_latent((latents[-2],
                                                          latent)))[0]
 
+
         starting_latent = latent.clone()
         for z_i in range(self.n_latents):
             latent = starting_latent.clone()
             for t in range(steps - priming_steps):
-                latent[:, z_i * self.hidden_dim:
-                       (z_i + 1) * self.hidden_dim].data.normal_(0, 1)
+                latent[:, z_i*self.hidden_dim :
+                          (z_i+1)*self.hidden_dim].data.normal_(0, 1)
 
                 generated_frame = self.generator(latent)[0].data
                 generations[z_i, t + priming_steps].copy_(generated_frame)
@@ -429,7 +251,7 @@ class IndependentModel(nn.Module):
         priming_steps = len(priming)
 
         generations = torch.Tensor(self.n_latents, steps, opt.batch_size,
-                                   *self.image_dim)
+                           *self.image_dim)
         generations[:, :priming_steps].copy_(torch.stack(priming).data)
 
         latents = [self.z1_prior[0]]
@@ -440,6 +262,7 @@ class IndependentModel(nn.Module):
                                     self.predict_latent((latents[-2],
                                                          latent)))[0]
 
+
         z_const = latent.clone()
         noise = Variable(torch.zeros(
             latent.size(0), self.hidden_dim).normal_(0, 1).type(dtype))
@@ -448,14 +271,14 @@ class IndependentModel(nn.Module):
 
         for z_i in range(self.n_latents):
             latent = z_const.clone()
-            single_z_const = z_const[:, z_i * self.hidden_dim:
-                                     (z_i + 1) * self.hidden_dim]
+            single_z_const = z_const[:, z_i*self.hidden_dim :
+                                        (z_i+1)*self.hidden_dim]
 
             for t, alpha in enumerate(torch.linspace(
-                    -1, 1, steps - priming_steps)):
+                                        -1, 1, steps - priming_steps)):
                 new_z = single_z_const + alpha * noise
-                latent[:, z_i * self.hidden_dim:
-                       (z_i + 1) * self.hidden_dim] = new_z
+                latent[:, z_i*self.hidden_dim :
+                          (z_i+1)*self.hidden_dim] = new_z
                 generated_frame = self.generator(latent)[0].data
                 generations[z_i, t + priming_steps].copy_(generated_frame)
         return generations
@@ -478,7 +301,7 @@ class IndependentModel(nn.Module):
 
             if t < len(sequence) - 1:
                 cat_prior = self.predict_latent((latents[-2], z_sample))
-                inferred_z_post = self.inference(sequence[t + 1],
+                inferred_z_post = self.inference(sequence[t+1],
                                                  cat_prior)
 
         priming_steps = 2
@@ -488,15 +311,14 @@ class IndependentModel(nn.Module):
             current_gen = [posterior_generations[i]
                            for i in range(priming_steps)]
 
-            start, end = l * self.hidden_dim, (l + 1) * self.hidden_dim
+            start, end = l * self.hidden_dim, (l+1) * self.hidden_dim
             for t in range(priming_steps, len(sequence)):
-                z[:, start: end].data.copy_(
-                    posteriors[t].data[:, start: end])
+                z[:, start : end].data.copy_(
+                        posteriors[t].data[:, start : end])
                 gen_dist = self.generator(z)
                 current_gen.append(gen_dist[0].cpu())
             all_generations.append(current_gen)
         return all_generations
-
 
 def batch_normalize(a):
     """ Requires `a` to be 2-dimensional, with dim 0 the batch dim """
@@ -530,14 +352,13 @@ class DeterministicModel(nn.Module):
         self.inference = inference(self.image_dim, self.total_z_dim)
         self.generator = generator(self.total_z_dim, self.image_dim)
 
+
     def predict_latent(self, latents):
         latent1, latent2 = latents
         z_prior = []
         for i, trans in enumerate(self.transitions):
-            previous1 = latent1[:, i *
-                                self.hidden_dim: (i + 1) * self.hidden_dim]
-            previous2 = latent2[:, i *
-                                self.hidden_dim: (i + 1) * self.hidden_dim]
+            previous1 = latent1[:, i*self.hidden_dim : (i+1)*self.hidden_dim]
+            previous2 = latent2[:, i*self.hidden_dim : (i+1)*self.hidden_dim]
             z_prior.append(trans((previous1, previous2)))
 
         prediction = torch.cat([prior[0] for prior in z_prior], 1)
@@ -550,6 +371,7 @@ class DeterministicModel(nn.Module):
                                     (prior[0].detach(),
                                      prior[1].detach()))[0]
         return batch_normalize(inferred_z)
+
 
     def forward(self, sequence, motion_weight=0):
         reshaped_sequence = [x.resize(x.size(0), *self.image_dim)
@@ -571,10 +393,10 @@ class DeterministicModel(nn.Module):
         for t in range(len(sequence)):
             start_div = 2
             inferred_z_post = self.infer(reshaped_sequence[t],
-                                         (cat_prior[0].detach(),
-                                          cat_prior[1].detach()))
+                                             (cat_prior[0].detach(),
+                                              cat_prior[1].detach()))
 
-            divergence = 100 * mse(inferred_z_post, cat_prior[0])
+            divergence = 100*mse(inferred_z_post, cat_prior[0])
             if t >= start_div:
                 output['seq_divergence'] += divergence
                 output['seq_trans_div'] += divergence
@@ -593,7 +415,7 @@ class DeterministicModel(nn.Module):
                                     reshaped_sequence[t])
             elif opt.loss == 'bce':
                 log_likelihood = -bce(gen_dist[0], reshaped_sequence[t]) / \
-                    sequence[0].size(0)
+                                  sequence[0].size(0)
             else:
                 raise Exception('Invalid loss function.')
 
@@ -651,8 +473,8 @@ class DeterministicModel(nn.Module):
         for t in range(1, priming_steps):
             latents.append(latent)
             latent = self.infer(priming[t],
-                                self.predict_latent((latents[-2],
-                                                     latent)))
+                                    self.predict_latent((latents[-2],
+                                                         latent)))
 
         starting_latent = latent.clone()
         for z_i in range(self.n_latents):
@@ -660,12 +482,12 @@ class DeterministicModel(nn.Module):
             trans = self.transitions[z_i]
             for t in range(steps - priming_steps):
                 previous = latent[:,
-                                  z_i * self.hidden_dim:
-                                  (z_i + 1) * self.hidden_dim].clone()
+                                  z_i*self.hidden_dim :
+                                  (z_i+1)*self.hidden_dim].clone()
                 predicted_z = trans(previous)
                 new_z = predicted_z[0]
-                latent[:, z_i * self.hidden_dim:
-                       (z_i + 1) * self.hidden_dim] = new_z
+                latent[:, z_i*self.hidden_dim :
+                            (z_i+1)*self.hidden_dim] = new_z
                 latent = batch_normalize(latent)
                 generated_frame = self.generator(latent)[0].data
                 generations[z_i, t + priming_steps].copy_(generated_frame)
@@ -675,7 +497,7 @@ class DeterministicModel(nn.Module):
         priming_steps = len(priming)
 
         generations = torch.Tensor(self.n_latents, steps, opt.batch_size,
-                                   *self.image_dim)
+                           *self.image_dim)
         generations[:, :priming_steps].copy_(torch.stack(priming).data)
 
         latents = [self.z1_prior[0]]
@@ -683,8 +505,8 @@ class DeterministicModel(nn.Module):
         for t in range(1, priming_steps):
             latents.append(latent)
             latent = self.infer(priming[t],
-                                self.predict_latent((latents[-2],
-                                                     latent)))
+                                    self.predict_latent((latents[-2],
+                                                         latent)))
 
         z_const = latent.clone()
         noise = Variable(torch.zeros(
@@ -694,14 +516,14 @@ class DeterministicModel(nn.Module):
 
         for z_i in range(self.n_latents):
             latent = z_const.clone()
-            single_z_const = z_const[:, z_i * self.hidden_dim:
-                                     (z_i + 1) * self.hidden_dim]
+            single_z_const = z_const[:, z_i*self.hidden_dim :
+                                        (z_i+1)*self.hidden_dim]
 
             for t, alpha in enumerate(torch.linspace(
-                    -1, 1, steps - priming_steps)):
+                                        -1, 1, steps - priming_steps)):
                 new_z = single_z_const + alpha * noise
-                latent[:, z_i * self.hidden_dim:
-                       (z_i + 1) * self.hidden_dim] = new_z
+                latent[:, z_i*self.hidden_dim :
+                          (z_i+1)*self.hidden_dim] = new_z
 
                 latent = batch_normalize(latent)
                 generated_frame = self.generator(latent)[0].data
@@ -726,8 +548,8 @@ class DeterministicModel(nn.Module):
 
             if t < len(sequence) - 1:
                 cat_prior = self.predict_latent((latents[-2], z_sample))
-                inferred_z_post = self.infer(sequence[t + 1],
-                                             cat_prior)
+                inferred_z_post = self.infer(sequence[t+1],
+                                                 cat_prior)
 
         priming_steps = 2
         all_generations = [posterior_generations]
@@ -736,15 +558,16 @@ class DeterministicModel(nn.Module):
             current_gen = [posterior_generations[i]
                            for i in range(priming_steps)]
 
-            start, end = l * self.hidden_dim, (l + 1) * self.hidden_dim
+            start, end = l * self.hidden_dim, (l+1) * self.hidden_dim
             for t in range(priming_steps, len(sequence)):
-                z[:, start: end].data.copy_(
-                    posteriors[t].data[:, start: end])
+                z[:, start : end].data.copy_(
+                        posteriors[t].data[:, start : end])
                 z = batch_normalize(z)
                 gen_dist = self.generator(z)
                 current_gen.append(gen_dist[0].cpu())
             all_generations.append(current_gen)
         return all_generations
+
 
 
 class MSEModel(nn.Module):
@@ -803,12 +626,12 @@ class MSEModel(nn.Module):
             if t < len(sequence) - 1:
                 current_z = self.transition(current_z)[0]
                 # z_prior = (z_prior[0],
-            #    Variable(torch.ones(z_prior[1].size()) * 5e-2).type(dtype))
-            # inferred_z_post = self.inference(reshaped_sequence[t+1], z_sample)
+                        #    Variable(torch.ones(z_prior[1].size()) * 5e-2).type(dtype))
+                # inferred_z_post = self.inference(reshaped_sequence[t+1], z_sample)
 
-            # z_var_mean += z_prior[1].mean().data[0]
+                # z_var_mean += z_prior[1].mean().data[0]
 
-            # z_var_mean = z_var_mean / (len(sequence) - 1) if len(sequence) > 1 else -1
+        # z_var_mean = z_var_mean / (len(sequence) - 1) if len(sequence) > 1 else -1
         return (generations,
                 loss / (len(sequence) - 1),
                 999,
@@ -836,7 +659,6 @@ class MSEModel(nn.Module):
             current_z = self.transition(current_z)[0]
 
         return generations
-
 
 class VAEModel(nn.Module):
     def __init__(self, hidden_dim, g_size):
@@ -901,15 +723,13 @@ class VAEModel(nn.Module):
                 z_prior = self.transition(z_sample)
                 # z_prior = (z_prior[0],
                 #            Variable(torch.ones(z_prior[1].size()) * 5e-2).type(dtype))
-                inferred_z_post = self.inference(
-                    reshaped_sequence[t + 1], z_sample)
+                inferred_z_post = self.inference(reshaped_sequence[t+1], z_sample)
 
                 z_var_mean += z_prior[1].mean().data[0]
                 z_var_min = min(z_var_min, z_prior[1].data.min())
                 z_var_max = max(z_var_max, z_prior[1].data.max())
 
-        z_var_mean = z_var_mean / \
-            (len(sequence) - 1) if len(sequence) > 1 else -1
+        z_var_mean = z_var_mean / (len(sequence) - 1) if len(sequence) > 1 else -1
         return (generations,
                 loss / len(sequence),
                 seq_divergence.data[0] / len(sequence),
