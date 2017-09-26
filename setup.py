@@ -5,7 +5,6 @@ import json
 import glob
 import os
 import shutil
-import pdb
 
 from torchvision import datasets, transforms
 from util import *
@@ -48,7 +47,7 @@ def write_options(opt, location):
         f.write(serial_opt)
         f.flush()
 
-def load_checkpoint(opt, dtype):
+def load_checkpoint(opt):
     checkpoint = torch.load('results/' + opt.load + '/model.t7')
     model = checkpoint['model'].type(dtype)
     i = checkpoint['i']
@@ -69,29 +68,6 @@ def load_checkpoint(opt, dtype):
             'name', 'load', 'sanity', 'resume', 'use_loaded_opt'
         ])
     return i, model
-
-def load_adversarial_checkpoint(opt, dtype):
-    checkpoint = torch.load('results/' + opt.load + '/model.t7')
-    autoencoder = checkpoint['autoencoder'].type(dtype)
-    adversary = checkpoint['adversary'].type(dtype)
-    i = checkpoint['i']
-    # optimizer = checkpoint['optimizer']
-    # scheduler = checkpoint['scheduler']
-    cp_opt = checkpoint['opt']
-
-    # we're strictly trying to pick up where we left off
-    # load everything just as it was (but rename)
-    if opt.resume:
-        setattrs(opt, cp_opt, exceptions=['load', 'resume', 'use_loaded_opt'])
-        opt.name = cp_opt['name'] + '_'
-
-    # if we want to use the options from the checkpoint, load them in
-    # (skip the ones that don't make sense to load)
-    if opt.use_loaded_opt:
-        setattrs(opt, cp_opt, exceptions=[
-            'name', 'load', 'sanity', 'resume', 'use_loaded_opt'
-        ])
-    return i, autoencoder, adversary
 
 def load_dataset(opt):
     if opt.resume:
@@ -176,10 +152,6 @@ def load_dataset(opt):
             load_workers = 1
 
         elif opt.data == 'mmnist':
-            if hostname == 'zaan':
-                data_path = '/home/will/vlg4/' + opt.data
-            else:
-                data_path = '/misc/vlgscratch4/FergusGroup/wwhitney/' + opt.data
             dataset_name = "channels{}_width{}_seqlen{}.t7".format(
                 opt.channels, opt.image_width, opt.seq_len)
             dataset_path = os.path.join(data_path, dataset_name)
@@ -197,11 +169,6 @@ def load_dataset(opt):
                                          seq_len=opt.seq_len,
                                          image_size=opt.image_width,
                                          colored=(opt.channels == 3))
-                # pdb.set_trace()
-                torch.save({
-                    'train': train_data,
-                    'test': test_data,
-                }, dataset_path)
             load_workers = 1
 
         # other video datasets are big and stored as chunks
