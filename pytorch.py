@@ -22,7 +22,7 @@ from util import *
 
 from modules import *
 from models import *
-from params import opt, dtype
+from params import *
 from setup import *
 from generations import *
 from bookkeeper import Bookkeeper
