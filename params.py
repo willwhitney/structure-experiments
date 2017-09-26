@@ -1,14 +1,8 @@
 import torch
 import socket
 import argparse
-import json
-import glob
-import os
 
-from atari_dataset import AtariData
-from video_dataset import *
-from env import *
-from util import *
+from util import get_gpu
 
 hostname = socket.gethostname()
 if socket.gethostname().find('touchy') >= 0:

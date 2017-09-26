@@ -34,10 +34,10 @@ def image_tensor(inputs, padding=1):
             c_dim = images[0].size(0)
             x_dim = images[0].size(1)
             y_dim = images[0].size(2)
-        # else:
-            # c_dim = 1
-            # x_dim = images[0].size(0)
-            # y_dim = images[0].size(1)
+        else:
+            c_dim = 1
+            x_dim = images[0].size(0)
+            y_dim = images[0].size(1)
 
         result = torch.ones(c_dim,
                             x_dim * len(images) + padding * (len(images)-1),
@@ -57,10 +57,10 @@ def image_tensor(inputs, padding=1):
             c_dim = images[0].size(0)
             x_dim = images[0].size(1)
             y_dim = images[0].size(2)
-        # else:
-        #     c_dim = 1
-        #     x_dim = images[0].size(0)
-        #     y_dim = images[0].size(1)
+        else:
+            c_dim = 1
+            x_dim = images[0].size(0)
+            y_dim = images[0].size(1)
 
         result = torch.ones(c_dim,
                             x_dim,
