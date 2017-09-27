@@ -143,15 +143,15 @@ def make_log(step, state):
     elapsed_seconds = elapsed_time.total_seconds()
     batches = opt.print_every / opt.batch_size
     log_values = (step,
-                    state['autoencoder_loss'] / batches,
-                    state['reconstruction_loss'] / batches,
-                    state['adversarial_loss'] / batches,
-                    state['adversary_loss'] / batches,
-                    state['true_loss'] / batches,
-                    state['false_loss'] / batches,
-                    state['true_outputs'].mean() / batches,
-                    state['false_outputs'].mean() / batches,
-                    elapsed_seconds / opt.print_every * 1000)
+                  state['autoencoder_loss'] / batches,
+                  state['reconstruction_loss'] / batches,
+                  state['adversarial_loss'] / batches,
+                  state['adversary_loss'] / batches,
+                  state['true_loss'] / batches,
+                  state['false_loss'] / batches,
+                  state['true_outputs'].mean() / batches,
+                  state['false_outputs'].mean() / batches,
+                  elapsed_seconds / opt.print_every * 1000)
 
     print(("Step: {:8d}, AE loss: {:8.3f}, Recon: {:8.3f}, Advers: {:8.3f}, "
             "Adversary loss: {:8.3f}, T loss: {:8.3f}, F loss: {:8.3f}, "
@@ -163,14 +163,17 @@ def make_log(step, state):
     logging.debug(format_string.format(*log_values))
     reset_state(state)
 
-    for x in sequence:
+    autoencoder.eval()
+    generation_sequence = [x.detach() for x in sequence]
+    for x in generation_sequence:
         x.volatile = True
     generations.save_paired_sequence(
         os.path.join(opt.save, "reconstruction", str(step) + '-'),
-        sequence[:2], reconstruction)
+        generation_sequence[:2], reconstruction)
     generations.save_single_replacement(
         os.path.join(opt.save, "ind_replace", str(step) + '-'), 
-        autoencoder, sequence)
+        autoencoder, generation_sequence)
+    autoencoder.train()
 
 
 def save_checkpoint(step, state):
@@ -183,83 +186,90 @@ def save_checkpoint(step, state):
     torch.save(save_dict, opt.save + '/model.t7')
 
 
-# def make_covariance(step, state):
-#     if opt.seq_len > 1:
-#         construct_covariance(opt.save + '/covariance/',
-#                              model, train_loader, 10,
-#                              label="train_" + str(step))
-#         construct_covariance(opt.save + '/covariance/',
-#                              model, test_loader, 10,
-#                              label="test_" + str(step))
 
 
 bookkeeper = Bookkeeper(i, reset_state({}), update_reducer)
 bookkeeper.every(opt.print_every, make_log)
 bookkeeper.every(opt.save_every, save_checkpoint)
-# bookkeeper.every(opt.cov_every, make_covariance)
 
-last_autoencoder_output = None
+def get_training_batch():
+    while True:
+        for sequence in train_loader:
+            batch = normalize_data(opt, dtype, sequence)
+            yield batch
+training_batch_generator = get_training_batch()
+
 while i < opt.max_steps:
-    for sequence in train_loader:
-        i += opt.batch_size
-
-        sequence = normalize_data(opt, dtype, sequence)
-        if last_autoencoder_output is None:
-            last_autoencoder_output = autoencoder(sequence[:2])
-            continue
+    i += opt.batch_size
+    sequence = next(training_batch_generator)
 
 
-        # ---- train the autoencoder -----
-        autoencoder_output = autoencoder(sequence[:2])
-        reconstruction = autoencoder_output['reconstruction']
-        reconstruction = [reconstruction[:opt.batch_size],
-                          reconstruction[opt.batch_size:]]
-        recon_loss = autoencoder_output['reconstruction_loss']
-        adversarial_loss = autoencoder_output['adversarial_loss']
-        autoencoder_loss = recon_loss + 0.5 * adversarial_loss
+    # ---- train the autoencoder -----
+    autoencoder_output = autoencoder(sequence[:2])
+    reconstruction = autoencoder_output['reconstruction']
+    reconstruction = [reconstruction[:opt.batch_size],
+                        reconstruction[opt.batch_size:]]
+    recon_loss = autoencoder_output['reconstruction_loss']
+    adversarial_loss = autoencoder_output['adversarial_loss']
+    autoencoder_loss = recon_loss + opt.adversarial_weight * adversarial_loss
 
-        autoencoder.zero_grad()
-        autoencoder_loss.backward()
-        autoencoder_optimizer.step()
-
-
-        adversary_input_latents0 = Variable(
-            torch.ones(opt.batch_size, 
-            opt.latents * opt.latent_dim)).type(dtype)
-        adversary_input_latents1 = Variable(
-            torch.zeros(opt.batch_size, 
-            opt.latents * opt.latent_dim)).type(dtype)
-        adversary_input_latentsbar = Variable(
-            torch.ones(opt.batch_size, 
-            opt.latents * opt.latent_dim) * 0.5).type(dtype)
-        # adversary_output = adversary(autoencoder_output['latents0'],
-        #                              autoencoder_output['latents1'],
-        #                              adversary_input_latentsbar)
-        # adversary_output = adversary(adversary_input_latents0,
-        #                              adversary_input_latents1,
-        #                              adversary_input_latentsbar)
-
-        # ---- train the adversary -----
-        adversary_output = adversary(autoencoder_output['latents0'],
-                                     autoencoder_output['latents1'],
-                                     last_autoencoder_output['latents0'])
-
-        true_loss = adversary_output['true_loss']
-        false_loss = adversary_output['false_loss']
-        adversary_loss = true_loss + false_loss
-
-        adversary.zero_grad()
-        adversary_loss.backward()
-        adversary_optimizer.step()
+    autoencoder.zero_grad()
+    autoencoder_loss.backward()
+    autoencoder_optimizer.step()
 
 
-        bookkeeper.update(i, {
-            'autoencoder_loss': autoencoder_loss,
-            'adversary_loss': adversary_loss,
-            **autoencoder_output, **adversary_output
-        })
+    # adversary_input_latents0 = Variable(
+    #     torch.ones(opt.batch_size, 
+    #     opt.latents * opt.latent_dim)).type(dtype)
+    # adversary_input_latents1 = Variable(
+    #     torch.zeros(opt.batch_size, 
+    #     opt.latents * opt.latent_dim)).type(dtype)
+    # adversary_input_latentsbar = Variable(
+    #     torch.ones(opt.batch_size, 
+    #     opt.latents * opt.latent_dim) * 0.5).type(dtype)
+    # adversary_output = adversary(autoencoder_output['latents0'],
+    #                              autoencoder_output['latents1'],
+    #                              adversary_input_latentsbar)
+    # adversary_output = adversary(adversary_input_latents0,
+    #                              adversary_input_latents1,
+    #                              adversary_input_latentsbar)
 
-        if i >= opt.max_steps:
-            break
+    # ---- train the adversary -----
+    first_sequence = next(training_batch_generator)
+    second_sequence = next(training_batch_generator)
+    third_sequence = next(training_batch_generator)
 
-        last_autoencoder_output = autoencoder_output
+    # current_latent0 = autoencoder.inference(first_sequence[0])
+    # current_latent1 = autoencoder.inference(first_sequence[1])
+    # first_latents = autoencoder.inference(
+    #     torch.cat(first_sequence[:2], 0)).detach()
+    # second_latents = autoencoder.inference(
+    #     torch.cat(second_sequence[:2], 0)).detach()
+    # third_latents = autoencoder.inference(
+    #     torch.cat(second_sequence[:2], 0)).detach()
+    s1_output = autoencoder(first_sequence[:2])
+    s2_output = autoencoder(second_sequence[:2])
+    s3_output = autoencoder(third_sequence[:2])
+    adversary_output = adversary(s1_output['latents0'],
+                                 s1_output['latents1'],
+                                 s2_output['latents0'],
+                                 s3_output['latents1'],)
+
+    true_loss = adversary_output['true_loss']
+    false_loss = adversary_output['false_loss']
+    adversary_loss = 0.5 * true_loss + 0.5 * false_loss
+
+    adversary.zero_grad()
+    adversary_loss.backward()
+    adversary_optimizer.step()
+
+
+    bookkeeper.update(i, {
+        'autoencoder_loss': autoencoder_loss,
+        'adversary_loss': adversary_loss,
+        **autoencoder_output, **adversary_output
+    })
+
+    if i >= opt.max_steps:
+        break
+

@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 
 import traceback
+import ipdb
 
 from util import *
 from modules import *
@@ -39,6 +40,12 @@ def motion_diffs(sequence):
     bidirectional_diffs.append(forward_diffs[-1])
     float_diffs = [diff.float() for diff in bidirectional_diffs]
     return float_diffs
+
+
+def batch_normalize(a):
+    """ Requires `a` to be 2-dimensional, with dim 0 the batch dim """
+    norms = a.pow(2).sum(1).sqrt()
+    return a / (norms.unsqueeze(1) + 1e-8)
 
 
 class Autoencoder(nn.Module):
@@ -86,7 +93,6 @@ def batch_replace(latents, latent, latent_dim, index_to_replace):
     return torch.cat(selected, 1)
 
 
-
 class IndependenceAdversary(nn.Module):
     def __init__(self, factors, latent_dim):
         super().__init__()
@@ -102,7 +108,7 @@ class IndependenceAdversary(nn.Module):
             [Adversary(latent_dim * factors, latent_dim, n_layers=4)
              for _ in range(factors)])
 
-    def forward(self, latents0, latents1, latents_bar):
+    def forward(self, latents0, latents1, latents_bar0, latents_bar1):
         outputs = {
             'true_loss': None,
             'false_loss': None,
@@ -116,7 +122,7 @@ class IndependenceAdversary(nn.Module):
         true_target = true_target.type(dtype)
         outputs['true_loss'] = bce_loss(stacked_true_outputs, true_target)
 
-        false_outputs = self.infer(latents0, latents_bar)
+        false_outputs = self.infer(latents_bar0, latents_bar1)
         stacked_false_outputs = torch.cat(false_outputs, 0)
         false_target = Variable(torch.zeros(stacked_false_outputs.size()))
         false_target = false_target.type(dtype)
@@ -168,8 +174,30 @@ class IndependentAutoencoder(nn.Module):
 
         x = torch.cat(xs, 0)
         latents = self.inference(x)
+        # latents = batch_normalize(latents)
+
         latents0 = latents[:xs[0].size(0)]
         latents1 = latents[xs[0].size(0):]
+
+        normed_latents0 = []
+        for i in range(self.n_latents):
+            single_latent = batch_select(
+                latents0, self.latent_dim, start=i, end=i)
+            normed_latents0.append(batch_normalize(single_latent))
+        latents0 = torch.cat(normed_latents0, 1)
+        # l0_noise = torch.normal(means=torch.zeros(latents0.size()),
+        #                         std=torch.ones(latents0.size()))
+        # latents0 = latents0 + 0.01 * Variable(l0_noise).type(dtype)
+        
+        normed_latents1 = []
+        for i in range(self.n_latents):
+            single_latent = batch_select(
+                latents1, self.latent_dim, start=i, end=i)
+            normed_latents1.append(batch_normalize(single_latent))
+        latents1 = torch.cat(normed_latents1, 1)
+        # l1_noise = torch.normal(means=torch.zeros(latents1.size()),
+        #                         std=torch.ones(latents1.size()))
+        # latents1 = latents1 + 0.01 * Variable(l1_noise).type(dtype)
 
         reconstruction = self.generator(latents)
         output['reconstruction_loss'] = mse_loss(reconstruction, x)
@@ -178,9 +206,10 @@ class IndependentAutoencoder(nn.Module):
         stacked_adversary_outputs = torch.cat(adversary_outputs, 0)
         adversary_targets = torch.Tensor(stacked_adversary_outputs.size())
         adversary_targets = Variable(adversary_targets.fill_(0.5).type(dtype))
+        # ipdb.set_trace()
 
         output['adversarial_loss'] = bce_loss(stacked_adversary_outputs,
-                                            adversary_targets)
+                                              adversary_targets)
         output['latents0'] = latents0.detach()
         output['latents1'] = latents1.detach()
         output['reconstruction'] = reconstruction
@@ -496,12 +525,6 @@ class IndependentModel(nn.Module):
                 current_gen.append(gen_dist[0].cpu())
             all_generations.append(current_gen)
         return all_generations
-
-
-def batch_normalize(a):
-    """ Requires `a` to be 2-dimensional, with dim 0 the batch dim """
-    norms = a.pow(2).sum(1).sqrt()
-    return a / (norms.unsqueeze(1) + 1e-8)
 
 
 class DeterministicModel(nn.Module):

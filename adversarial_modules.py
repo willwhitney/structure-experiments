@@ -21,11 +21,13 @@ else:
 class Adversary(nn.Module):
     def __init__(self, input_dim, hidden_dim, n_layers=2):
         super().__init__()
-        self.layers = [nn.Linear(input_dim, hidden_dim)]
+        self.layers = [nn.Linear(input_dim, input_dim)]
         for i in range(n_layers - 2):
-            self.layers.append(nn.Linear(hidden_dim, hidden_dim))
-        self.layers.append(nn.Linear(hidden_dim, 1))
+            self.layers.append(nn.Linear(input_dim, input_dim))
+        self.layers.append(nn.Linear(input_dim, 1))
         self.layers = nn.ModuleList(self.layers)
+
+        # self.layers = nn.ModuleList([nn.Linear(input_dim, 1)])
 
     def forward(self, x):
         current = x
@@ -35,3 +37,4 @@ class Adversary(nn.Module):
             current = activation(current)
         current = F.sigmoid(self.layers[-1](current))
         return current
+        # return Variable(torch.zeros(x.size(0), 1)).type(dtype)

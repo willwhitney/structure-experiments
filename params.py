@@ -72,4 +72,7 @@ parser.add_argument('--balls', default=1, type=int,
 
 parser.add_argument('--image-width', default=128, type=int)
 parser.add_argument('--channels', default=3, type=int)
+
+
+parser.add_argument('--adversarial-weight', default=0.01, type=float)
 opt = parser.parse_args()

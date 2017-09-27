@@ -176,10 +176,6 @@ def load_dataset(opt):
             load_workers = 1
 
         elif opt.data == 'mmnist':
-            if hostname == 'zaan':
-                data_path = '/home/will/vlg4/' + opt.data
-            else:
-                data_path = '/misc/vlgscratch4/FergusGroup/wwhitney/' + opt.data
             dataset_name = "channels{}_width{}_seqlen{}.t7".format(
                 opt.channels, opt.image_width, opt.seq_len)
             dataset_path = os.path.join(data_path, dataset_name)
