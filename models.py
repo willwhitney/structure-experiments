@@ -115,14 +115,12 @@ class IndependenceAdversary(nn.Module):
         outputs['true_loss'] = bce_loss(true_output, true_target)
         outputs['true_outputs'] = true_output
 
+        false_target = Variable(torch.zeros(true_target.size())).type(dtype)
         for i in range(self.factors):
             latent_b = batch_select(latents_b, self.latent_dim, start=i, end=i)
             false_example = batch_replace(latents_a, latent_b, self.latent_dim, i)
             false_output = self.infer(false_example)
-            
-            false_target = Variable(torch.zeros(false_output.size()))
-            false_target = false_target.type(dtype)
-            outputs['false_loss'] = (1 / self.factors) * bce_loss(
+            outputs['false_loss'] += (1 / self.factors) * bce_loss(
                 false_output, false_target)
             outputs['false_outputs'] += false_output
 
