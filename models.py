@@ -171,34 +171,10 @@ class IndependentAutoencoder(nn.Module):
             'latents1': None,
             'reconstruction': None,
         }
-
         x = torch.cat(xs, 0)
-        latents = self.inference(x)
-        # latents = batch_normalize(latents)
-
+        latents = self.infer(x)
         latents0 = latents[:xs[0].size(0)]
         latents1 = latents[xs[0].size(0):]
-
-        normed_latents0 = []
-        for i in range(self.n_latents):
-            single_latent = batch_select(
-                latents0, self.latent_dim, start=i, end=i)
-            normed_latents0.append(batch_normalize(single_latent))
-        latents0 = torch.cat(normed_latents0, 1)
-        # l0_noise = torch.normal(means=torch.zeros(latents0.size()),
-        #                         std=torch.ones(latents0.size()))
-        # latents0 = latents0 + 0.01 * Variable(l0_noise).type(dtype)
-        
-        normed_latents1 = []
-        for i in range(self.n_latents):
-            single_latent = batch_select(
-                latents1, self.latent_dim, start=i, end=i)
-            normed_latents1.append(batch_normalize(single_latent))
-        latents1 = torch.cat(normed_latents1, 1)
-        # l1_noise = torch.normal(means=torch.zeros(latents1.size()),
-        #                         std=torch.ones(latents1.size()))
-        # latents1 = latents1 + 0.01 * Variable(l1_noise).type(dtype)
-
         reconstruction = self.generator(latents)
         output['reconstruction_loss'] = mse_loss(reconstruction, x)
 
@@ -216,8 +192,20 @@ class IndependentAutoencoder(nn.Module):
 
         return output
 
+    def infer(self, x):
+        latents = self.inference(x)
+
+        normed_latents = []
+        for i in range(self.n_latents):
+            single_latent = batch_select(
+                latents, self.latent_dim, start=i, end=i)
+            normed_latents.append(batch_normalize(single_latent))
+        latents = torch.cat(normed_latents, 1)
+
+        return latents
+
     def generate_independent_posterior(self, sequence):
-        latents = [self.inference(s) for s in sequence]
+        latents = [self.infer(s) for s in sequence]
         l0 = latents[0]
 
         posterior_generations = [self.generator(latent) for latent in latents]
