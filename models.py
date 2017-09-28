@@ -98,17 +98,10 @@ class IndependenceAdversary(nn.Module):
         super().__init__()
         self.latent_dim = latent_dim
         self.factors = factors
-        # self.adversary01 = Adversary(latent_dim * 2, latent_dim)
-        # self.adversary10 = Adversary(latent_dim * 2, latent_dim)
 
-        # adversary i attempts to predict whether z^i_1 is valid
-        # given the values of z^{[0..i) U (i, factors]}_0, i.e.
-        # the value of every other factor at timestep 0
-        self.adversaries = nn.ModuleList(
-            [Adversary(latent_dim * factors, latent_dim, n_layers=4)
-             for _ in range(factors)])
+        self.adversary = Adversary(latent_dim * factors, latent_dim, n_layers=4)
 
-    def forward(self, latents0, latents1, latents_bar0, latents_bar1):
+    def forward(self, latents_a, latents_b):
         outputs = {
             'true_loss': None,
             'false_loss': None,
@@ -116,36 +109,27 @@ class IndependenceAdversary(nn.Module):
             'false_outputs': None,
         }
 
-        true_outputs = self.infer(latents0, latents1)        
-        stacked_true_outputs = torch.cat(true_outputs, 0)
-        true_target = Variable(torch.ones(stacked_true_outputs.size()))
+        true_output = self.infer(latents_a)
+        true_target = Variable(torch.ones(true_output.size()))
         true_target = true_target.type(dtype)
-        outputs['true_loss'] = bce_loss(stacked_true_outputs, true_target)
+        outputs['true_loss'] = bce_loss(true_output, true_target)
+        outputs['true_outputs'] = true_output
 
-        false_outputs = self.infer(latents_bar0, latents_bar1)
-        stacked_false_outputs = torch.cat(false_outputs, 0)
-        false_target = Variable(torch.zeros(stacked_false_outputs.size()))
-        false_target = false_target.type(dtype)
-        outputs['false_loss'] = bce_loss(stacked_false_outputs, false_target)
+        for i in range(self.factors):
+            latent_b = batch_select(latents_b, self.latent_dim, start=i, end=i)
+            false_example = batch_replace(latents_a, latent_b, self.latent_dim, i)
+            false_output = self.infer(false_example)
+            false_target = Variable(torch.zeros(false_output.size()))
+            outputs['false_loss'] = (1 / self.factors) * bce_loss(
+                false_output, false_target)
+            outputs['false_outputs'] += false_output
 
-        outputs['true_outputs'] = stacked_true_outputs
-        outputs['false_outputs'] = stacked_false_outputs
+        
+        outputs['false_outputs'] /= self.factors
         return outputs
 
-    def infer(self, latents0, latents1):
-        outputs = []
-        for i, adversary in enumerate(self.adversaries):
-            inputs = [
-                batch_select(latents0, self.latent_dim, end=i-1),
-                batch_select(latents0, self.latent_dim, start=i+1),
-                batch_select(latents1, self.latent_dim, start=i, end=i),
-            ]
-            inputs = [x for x in inputs if len(x) > 0]
-            stacked_input = torch.cat(inputs, 1)
-
-            output = adversary(stacked_input)
-            outputs.append(output)
-        return outputs
+    def infer(self, latents):
+        return self.adversary(latents)
 
             
 class IndependentAutoencoder(nn.Module):
@@ -163,7 +147,7 @@ class IndependentAutoencoder(nn.Module):
         self.inference = inference(self.image_dim, total_z_dim)
         self.generator = generator(total_z_dim, self.image_dim)
 
-    def forward(self, xs):
+    def forward(self, x):
         output = {
             'reconstruction_loss': None,
             'adversarial_loss': None,
@@ -172,46 +156,26 @@ class IndependentAutoencoder(nn.Module):
             'reconstruction': None,
         }
 
-        x = torch.cat(xs, 0)
         latents = self.inference(x)
-        # latents = batch_normalize(latents)
 
-        latents0 = latents[:xs[0].size(0)]
-        latents1 = latents[xs[0].size(0):]
-
-        normed_latents0 = []
+        normed_latents = []
         for i in range(self.n_latents):
             single_latent = batch_select(
-                latents0, self.latent_dim, start=i, end=i)
-            normed_latents0.append(batch_normalize(single_latent))
-        latents0 = torch.cat(normed_latents0, 1)
-        # l0_noise = torch.normal(means=torch.zeros(latents0.size()),
-        #                         std=torch.ones(latents0.size()))
-        # latents0 = latents0 + 0.01 * Variable(l0_noise).type(dtype)
-        
-        normed_latents1 = []
-        for i in range(self.n_latents):
-            single_latent = batch_select(
-                latents1, self.latent_dim, start=i, end=i)
-            normed_latents1.append(batch_normalize(single_latent))
-        latents1 = torch.cat(normed_latents1, 1)
-        # l1_noise = torch.normal(means=torch.zeros(latents1.size()),
-        #                         std=torch.ones(latents1.size()))
-        # latents1 = latents1 + 0.01 * Variable(l1_noise).type(dtype)
+                latents, self.latent_dim, start=i, end=i)
+            normed_latents.append(batch_normalize(single_latent))
+        latents = torch.cat(normed_latents0, 1)
 
         reconstruction = self.generator(latents)
         output['reconstruction_loss'] = mse_loss(reconstruction, x)
 
-        adversary_outputs = self.adversary.infer(latents0, latents1)
+        adversary_outputs = self.adversary.infer(latents)
         stacked_adversary_outputs = torch.cat(adversary_outputs, 0)
         adversary_targets = torch.Tensor(stacked_adversary_outputs.size())
         adversary_targets = Variable(adversary_targets.fill_(0.5).type(dtype))
-        # ipdb.set_trace()
 
         output['adversarial_loss'] = bce_loss(stacked_adversary_outputs,
                                               adversary_targets)
-        output['latents0'] = latents0.detach()
-        output['latents1'] = latents1.detach()
+        output['latents'] = latents.detach()
         output['reconstruction'] = reconstruction
 
         return output

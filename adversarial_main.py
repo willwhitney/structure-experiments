@@ -205,7 +205,7 @@ while i < opt.max_steps:
 
 
     # ---- train the autoencoder -----
-    autoencoder_output = autoencoder(sequence[:2])
+    autoencoder_output = autoencoder(sequence[:1])
     reconstruction = autoencoder_output['reconstruction']
     reconstruction = [reconstruction[:opt.batch_size],
                         reconstruction[opt.batch_size:]]
@@ -218,42 +218,11 @@ while i < opt.max_steps:
     autoencoder_optimizer.step()
 
 
-    # adversary_input_latents0 = Variable(
-    #     torch.ones(opt.batch_size, 
-    #     opt.latents * opt.latent_dim)).type(dtype)
-    # adversary_input_latents1 = Variable(
-    #     torch.zeros(opt.batch_size, 
-    #     opt.latents * opt.latent_dim)).type(dtype)
-    # adversary_input_latentsbar = Variable(
-    #     torch.ones(opt.batch_size, 
-    #     opt.latents * opt.latent_dim) * 0.5).type(dtype)
-    # adversary_output = adversary(autoencoder_output['latents0'],
-    #                              autoencoder_output['latents1'],
-    #                              adversary_input_latentsbar)
-    # adversary_output = adversary(adversary_input_latents0,
-    #                              adversary_input_latents1,
-    #                              adversary_input_latentsbar)
-
     # ---- train the adversary -----
-    first_sequence = next(training_batch_generator)
-    second_sequence = next(training_batch_generator)
-    third_sequence = next(training_batch_generator)
-
-    # current_latent0 = autoencoder.inference(first_sequence[0])
-    # current_latent1 = autoencoder.inference(first_sequence[1])
-    # first_latents = autoencoder.inference(
-    #     torch.cat(first_sequence[:2], 0)).detach()
-    # second_latents = autoencoder.inference(
-    #     torch.cat(second_sequence[:2], 0)).detach()
-    # third_latents = autoencoder.inference(
-    #     torch.cat(second_sequence[:2], 0)).detach()
-    s1_output = autoencoder(first_sequence[:2])
-    s2_output = autoencoder(second_sequence[:2])
-    s3_output = autoencoder(third_sequence[:2])
-    adversary_output = adversary(s1_output['latents0'],
-                                 s1_output['latents1'],
-                                 s2_output['latents0'],
-                                 s3_output['latents1'],)
+    other_sequence = next(training_batch_generator)
+    other_output = autoencoder(other_sequence[:1])
+    adversary_output = adversary(autoencoder_output['latents'],
+                                 other_output['latents'])
 
     true_loss = adversary_output['true_loss']
     false_loss = adversary_output['false_loss']
