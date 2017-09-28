@@ -169,7 +169,7 @@ def make_log(step, state):
         x.volatile = True
     generations.save_paired_sequence(
         os.path.join(opt.save, "reconstruction", str(step) + '-'),
-        generation_sequence[:2], reconstruction)
+        generation_sequence[:1], reconstruction)
     generations.save_single_replacement(
         os.path.join(opt.save, "ind_replace", str(step) + '-'), 
         autoencoder, generation_sequence)
@@ -205,10 +205,9 @@ while i < opt.max_steps:
 
 
     # ---- train the autoencoder -----
-    autoencoder_output = autoencoder(sequence[:1])
+    autoencoder_output = autoencoder(sequence[0])
     reconstruction = autoencoder_output['reconstruction']
-    reconstruction = [reconstruction[:opt.batch_size],
-                        reconstruction[opt.batch_size:]]
+    reconstruction = [reconstruction]
     recon_loss = autoencoder_output['reconstruction_loss']
     adversarial_loss = autoencoder_output['adversarial_loss']
     autoencoder_loss = recon_loss + opt.adversarial_weight * adversarial_loss
@@ -220,7 +219,7 @@ while i < opt.max_steps:
 
     # ---- train the adversary -----
     other_sequence = next(training_batch_generator)
-    other_output = autoencoder(other_sequence[:1])
+    other_output = autoencoder(other_sequence[0])
     adversary_output = adversary(autoencoder_output['latents'],
                                  other_output['latents'])
 

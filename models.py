@@ -106,7 +106,7 @@ class IndependenceAdversary(nn.Module):
             'true_loss': None,
             'false_loss': None,
             'true_outputs': None,
-            'false_outputs': None,
+            'false_outputs': 0,
         }
 
         true_output = self.infer(latents_a)
@@ -119,7 +119,9 @@ class IndependenceAdversary(nn.Module):
             latent_b = batch_select(latents_b, self.latent_dim, start=i, end=i)
             false_example = batch_replace(latents_a, latent_b, self.latent_dim, i)
             false_output = self.infer(false_example)
+            
             false_target = Variable(torch.zeros(false_output.size()))
+            false_target = false_target.type(dtype)
             outputs['false_loss'] = (1 / self.factors) * bce_loss(
                 false_output, false_target)
             outputs['false_outputs'] += false_output
@@ -151,8 +153,7 @@ class IndependentAutoencoder(nn.Module):
         output = {
             'reconstruction_loss': None,
             'adversarial_loss': None,
-            'latents0': None,
-            'latents1': None,
+            'latents': None,
             'reconstruction': None,
         }
 
@@ -163,7 +164,7 @@ class IndependentAutoencoder(nn.Module):
             single_latent = batch_select(
                 latents, self.latent_dim, start=i, end=i)
             normed_latents.append(batch_normalize(single_latent))
-        latents = torch.cat(normed_latents0, 1)
+        latents = torch.cat(normed_latents, 1)
 
         reconstruction = self.generator(latents)
         output['reconstruction_loss'] = mse_loss(reconstruction, x)
