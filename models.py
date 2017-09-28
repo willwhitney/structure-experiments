@@ -135,21 +135,19 @@ class IndependenceAdversary(nn.Module):
 
             
 class IndependentAutoencoder(nn.Module):
-    def __init__(self, n_latents, latent_dim, img_size, adversary,
+    def __init__(self, n_latents, latent_dim, img_size,
                  inference=DCGANFirstInference, generator=DCGANGenerator):
         super().__init__()
         self.n_latents = n_latents
         self.latent_dim = latent_dim
         self.image_dim = [opt.channels, img_size, img_size]
 
-        self.adversary = adversary
-
         total_z_dim = n_latents * latent_dim
 
         self.inference = inference(self.image_dim, total_z_dim)
         self.generator = generator(total_z_dim, self.image_dim)
 
-    def forward(self, x):
+    def forward(self, adversary, x):
         output = {
             'reconstruction_loss': None,
             'adversarial_loss': None,
@@ -161,7 +159,7 @@ class IndependentAutoencoder(nn.Module):
         reconstruction = self.generate(latents)
         output['reconstruction_loss'] = mse_loss(reconstruction, x)
 
-        adversary_outputs = self.adversary.infer(latents)
+        adversary_outputs = adversary.infer(latents)
         stacked_adversary_outputs = torch.cat(adversary_outputs, 0)
         adversary_targets = torch.Tensor(stacked_adversary_outputs.size())
         adversary_targets = Variable(adversary_targets.fill_(0.5).type(dtype))
@@ -185,7 +183,7 @@ class IndependentAutoencoder(nn.Module):
         return latents
 
     def generate(self, z):
-        return self.generator(latents)
+        return self.generator(z)
 
     def generate_independent_posterior(self, sequence):
         latents = [self.infer(s) for s in sequence]
