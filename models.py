@@ -169,7 +169,7 @@ class IndependentAutoencoder(nn.Module):
 
         return output
 
-    def infer(self, x):
+    def infer(self, x, noise=opt.latent_noise):
         latents = self.inference(x)
 
         normed_latents = []
@@ -178,13 +178,18 @@ class IndependentAutoencoder(nn.Module):
                 latents, self.latent_dim, start=i, end=i)
             normed_latents.append(batch_normalize(single_latent))
         latents = torch.cat(normed_latents, 1)
+
+        if noise > 0:
+            latent_noise = torch.normal(means=torch.zeros(latents.size()),
+                                        std=torch.ones(latents.size()))
+            latents += noise * Variable(latent_noise).type(dtype)
         return latents
 
     def generate(self, z):
         return self.generator(z)
 
     def generate_independent_posterior(self, sequence):
-        latents = [self.infer(s) for s in sequence]
+        latents = [self.infer(s, noise=0) for s in sequence]
         l0 = latents[0]
 
         posterior_generations = [self.generate(latent) for latent in latents]
