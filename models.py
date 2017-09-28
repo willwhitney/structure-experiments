@@ -157,16 +157,8 @@ class IndependentAutoencoder(nn.Module):
             'reconstruction': None,
         }
 
-        latents = self.inference(x)
-
-        normed_latents = []
-        for i in range(self.n_latents):
-            single_latent = batch_select(
-                latents, self.latent_dim, start=i, end=i)
-            normed_latents.append(batch_normalize(single_latent))
-        latents = torch.cat(normed_latents, 1)
-
-        reconstruction = self.generator(latents)
+        latents = self.infer(x)
+        reconstruction = self.generate(latents)
         output['reconstruction_loss'] = mse_loss(reconstruction, x)
 
         adversary_outputs = self.adversary.infer(latents)
@@ -181,11 +173,25 @@ class IndependentAutoencoder(nn.Module):
 
         return output
 
+    def infer(self, x):
+        latents = self.inference(x)
+
+        normed_latents = []
+        for i in range(self.n_latents):
+            single_latent = batch_select(
+                latents, self.latent_dim, start=i, end=i)
+            normed_latents.append(batch_normalize(single_latent))
+        latents = torch.cat(normed_latents, 1)
+        return latents
+
+    def generate(self, z):
+        return self.generator(latents)
+
     def generate_independent_posterior(self, sequence):
-        latents = [self.inference(s) for s in sequence]
+        latents = [self.infer(s) for s in sequence]
         l0 = latents[0]
 
-        posterior_generations = [self.generator(latent) for latent in latents]
+        posterior_generations = [self.generate(latent) for latent in latents]
         all_generations = [posterior_generations]
         for l in range(self.n_latents):
             generations_l = [posterior_generations[0]]
@@ -194,7 +200,7 @@ class IndependentAutoencoder(nn.Module):
                     latents[i], self.latent_dim, start=l, end=l)
                 new_latents = batch_replace(
                     l0, new_latent_l, self.latent_dim, l)
-                generations_l.append(self.generator(new_latents))
+                generations_l.append(self.generate(new_latents))
             all_generations.append(generations_l)
 
         return all_generations
