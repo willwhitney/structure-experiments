@@ -149,21 +149,19 @@ class IndependenceAdversary(nn.Module):
 
             
 class IndependentAutoencoder(nn.Module):
-    def __init__(self, n_latents, latent_dim, img_size, adversary,
+    def __init__(self, n_latents, latent_dim, img_size,
                  inference=DCGANFirstInference, generator=DCGANGenerator):
         super().__init__()
         self.n_latents = n_latents
         self.latent_dim = latent_dim
         self.image_dim = [opt.channels, img_size, img_size]
 
-        self.adversary = adversary
-
         total_z_dim = n_latents * latent_dim
 
         self.inference = inference(self.image_dim, total_z_dim)
         self.generator = generator(total_z_dim, self.image_dim)
 
-    def forward(self, xs):
+    def forward(self, adversary, xs):
         output = {
             'reconstruction_loss': None,
             'adversarial_loss': None,
@@ -178,7 +176,7 @@ class IndependentAutoencoder(nn.Module):
         reconstruction = self.generator(latents)
         output['reconstruction_loss'] = mse_loss(reconstruction, x)
 
-        adversary_outputs = self.adversary.infer(latents0, latents1)
+        adversary_outputs = adversary.infer(latents0, latents1)
         stacked_adversary_outputs = torch.cat(adversary_outputs, 0)
         adversary_targets = torch.Tensor(stacked_adversary_outputs.size())
         adversary_targets = Variable(adversary_targets.fill_(0.5).type(dtype))

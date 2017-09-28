@@ -43,7 +43,7 @@ else:
     adversary = IndependenceAdversary(opt.latents, opt.latent_dim).type(dtype)
     autoencoder = IndependentAutoencoder(
         opt.latents, opt.latent_dim,
-        opt.image_width, adversary,
+        opt.image_width,
         inference=DeterministicTinyDCGANFirstInference,
         generator=DeterministicTinyDCGANGenerator).type(dtype)
 
@@ -205,7 +205,7 @@ while i < opt.max_steps:
 
 
     # ---- train the autoencoder -----
-    autoencoder_output = autoencoder(sequence[:2])
+    autoencoder_output = autoencoder(adversary, sequence[:2])
     reconstruction = autoencoder_output['reconstruction']
     reconstruction = [reconstruction[:opt.batch_size],
                         reconstruction[opt.batch_size:]]
@@ -215,6 +215,7 @@ while i < opt.max_steps:
 
     autoencoder.zero_grad()
     autoencoder_loss.backward()
+    adversary.zero_grad()
     autoencoder_optimizer.step()
 
 
@@ -247,9 +248,9 @@ while i < opt.max_steps:
     #     torch.cat(second_sequence[:2], 0)).detach()
     # third_latents = autoencoder.inference(
     #     torch.cat(second_sequence[:2], 0)).detach()
-    s1_output = autoencoder(first_sequence[:2])
-    s2_output = autoencoder(second_sequence[:2])
-    s3_output = autoencoder(third_sequence[:2])
+    s1_output = autoencoder(adversary, first_sequence[:2])
+    s2_output = autoencoder(adversary, second_sequence[:2])
+    s3_output = autoencoder(adversary, third_sequence[:2])
     adversary_output = adversary(s1_output['latents0'],
                                  s1_output['latents1'],
                                  s2_output['latents0'],
