@@ -104,8 +104,8 @@ class IndependenceAdversary(nn.Module):
     def forward(self, latents_a, latents_b):
         outputs = {
             'true_loss': None,
-            'false_loss': None,
             'true_outputs': None,
+            'false_loss': 0,
             'false_outputs': 0,
         }
 
