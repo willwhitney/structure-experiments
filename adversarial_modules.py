@@ -23,6 +23,7 @@ class Adversary(nn.Module):
         super().__init__()
         self.layers = [nn.Linear(input_dim, input_dim)]
         for i in range(n_layers - 2):
+            self.layers.append(nn.BatchNorm1d(input_dim))
             self.layers.append(nn.Linear(input_dim, input_dim))
         self.layers.append(nn.Linear(input_dim, 1))
         self.layers = nn.ModuleList(self.layers)

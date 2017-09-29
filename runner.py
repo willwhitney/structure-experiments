@@ -11,13 +11,13 @@ if not os.path.exists("slurm_logs"):
 if not os.path.exists("slurm_scripts"):
     os.makedirs("slurm_scripts")
 
-
+basename = "pred-slurm"
 grids = [
     {
-        'noise': [0.1],
-        'sharpening_rate': [8],
-        'learning_rate': [3e-4],
-        'heads': [1],
+        'no-git': [True],
+        'seq-len': [5],
+        'image-width': [32],
+        'adversarial-weight': [1, 0.1, 0.001, 0.0001],
     }
 ]
 
@@ -30,12 +30,12 @@ for grid in grids:
             for option_set in product_options]
 
 if dry_run:
-    print "NOT starting jobs:"
+    print("NOT starting jobs:")
 else:
-    print "Starting jobs:"
+    print("Starting jobs:")
 
 for job in jobs:
-    jobname = ""
+    jobname = basename
     flagstring = ""
     for flag in job:
         if isinstance(job[flag], bool):
@@ -43,7 +43,7 @@ for job in jobs:
                 jobname = jobname + "_" + flag
                 flagstring = flagstring + " --" + flag
             else:
-                print "WARNING: Excluding 'False' flag " + flag
+                print("WARNING: Excluding 'False' flag " + flag)
         elif flag == 'import':
             imported_network_name = job[flag]
             if imported_network_name in base_networks.keys():
