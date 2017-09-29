@@ -43,7 +43,7 @@ else:
 merged_grid = {}
 for grid in grids:
     for key in grid:
-        merged_grid[key] = [] if key not in merged_grid
+        merged_grid[key] = [] if key not in merged_grid else merged_grid[key]
         merged_grid[key] += grid[key]
 
 varying_keys = {key for key in merged_grid if len(merged_grid[key]) > 1}
@@ -54,8 +54,9 @@ for job in jobs:
     for flag in job:
         if isinstance(job[flag], bool):
             if job[flag]:
-                jobname = jobname + "_" + flag
                 flagstring = flagstring + " --" + flag
+                if flag in varying_keys:
+                    jobname = jobname + "_" + flag + str(job[flag])
             else:
                 print("WARNING: Excluding 'False' flag " + flag)
         elif flag == 'import':
@@ -96,5 +97,5 @@ for job in jobs:
 
         if not dry_run:
             os.system((
-                "sbatch -N 1 -c 3 --gres=gpu:1 --mem=60000 "
+                "sbatch -N 1 -c 8 --gres=gpu:1 --mem=60000 "
                 "--time=2-00:00:00 slurm_scripts/" + jobname + ".slurm &"))
