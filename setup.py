@@ -16,17 +16,20 @@ from moving_mnist.dataset import MovingMNIST
 
 hostname = socket.gethostname()
 
-def make_result_folder(opt, location):
+def make_result_folder(opt, location, force=False):
     if not os.path.exists(location):
         os.makedirs(location)
     else:
         filelist = glob.glob(location + "/*")
         if len(filelist) > 0:
-            clear = query_yes_no(
-                "This network name is already in use. "
-                "Continuing will delete all of the files in the directory.\n"
-                "Files: \n" + "\n".join(filelist) + "\n\n"
-                "Continue?")
+            if force:
+                clear = True
+            else:
+                clear = query_yes_no(
+                    "This network name is already in use. "
+                    "Continuing will delete all the files in the directory.\n"
+                    "Files: \n" + "\n".join(filelist) + "\n\n"
+                    "Continue?")
             if not clear:
                 print("Not deleting anything. Quitting instead.")
                 exit()

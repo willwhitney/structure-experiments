@@ -70,7 +70,7 @@ if opt.git:
 else:
     opt.git_hash = get_commit_hash()
 
-make_result_folder(opt, opt.save)
+make_result_folder(opt, opt.save, force=opt.force)
 write_options(opt, opt.save)
 
 logging.basicConfig(filename = opt.save + "/results.csv",
@@ -227,7 +227,7 @@ def make_covariance(step, state):
 bookkeeper = Bookkeeper(i, reset_state({}), update_reducer)
 bookkeeper.every(opt.print_every, make_log)
 bookkeeper.every(opt.save_every, save_checkpoint)
-bookkeeper.every(opt.cov_every, make_covariance)
+# bookkeeper.every(opt.cov_every, make_covariance)
 
 random_mean_vars = []
 norandom_mean_vars = []
@@ -242,9 +242,7 @@ while i < opt.max_steps:
         bookkeeper.update(i, output)
 
         nll = output['seq_nll']
-        # seq_divergence = output['seq_divergence']
-        seq_divergence = output['seq_trans_div']
-        # seq_divergence = Variable(torch.zeros(1)).type(dtype)
+        seq_divergence = output['seq_divergence']
 
         # accumulate the variances for randomizing and nonrandomizing frames
         if opt.data == 'random_balls':
