@@ -292,7 +292,7 @@ class IndependentModel(nn.Module):
         cat_prior = self.z1_prior
         latents = [cat_prior[0]]
         for t in range(len(sequence)):
-            start_trans_div = 1
+            start_div = 2
             # give it the sample from z_{t-1}
             # inferred_z_post = self.inference(reshaped_sequence[t+1], z_sample)
 
@@ -307,13 +307,13 @@ class IndependentModel(nn.Module):
                 pdb.set_trace()
             if t == 0:
                 output['seq_prior_div'] += divergence
-            elif t >= start_trans_div:
+            elif t >= start_div:
                 output['seq_trans_div'] += divergence
 
             output['posterior_variances'].append(inferred_z_post[1])
 
             z_sample = sample_log2(inferred_z_post)
-            latents.append(z_sample)
+            latents.append(inferred_z_post[0])
             gen_dist = self.generator(z_sample)
 
             if opt.loss == 'normal':
@@ -332,7 +332,7 @@ class IndependentModel(nn.Module):
             output['generations'].append(gen_dist)
 
             if t < len(sequence) - 1:
-                if t >= start_trans_div - 1:
+                if t >= start_div - 1:
                     cat_prior = self.predict_latent((latents[-2], latents[-1]))
                     output['prior_variances'].append(cat_prior[1])
                 else:
@@ -341,7 +341,7 @@ class IndependentModel(nn.Module):
         output['seq_nll'] /= len(sequence)
         output['seq_divergence'] /= len(sequence)
         if len(sequence) > 1:
-            output['seq_trans_div'] /= (len(sequence) - start_trans_div)
+            output['seq_trans_div'] /= (len(sequence) - start_div)
 
         return output
 
