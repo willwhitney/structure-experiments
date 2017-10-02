@@ -224,7 +224,7 @@ class IndependentAutoencoder(nn.Module):
 
 class PredictionModel(nn.Module):
     def __init__(self, n_latents, hidden_dim, context_dim, img_size,
-                 transition=Transition,
+                 transition=DeterministicTransition,
                  inference=DeterministicTinyDCGANFirstInference, 
                  generator=DeterministicTinyDCGANGenerator):
         super().__init__()
@@ -233,6 +233,7 @@ class PredictionModel(nn.Module):
         self.image_dim = [opt.channels, img_size, img_size]
 
         self.transitions = nn.ModuleList([transition(self.hidden_dim,
+                                                     self.hidden_dim,
                                                      layers=opt.trans_layers)
                                           for _ in range(n_latents)])
 
@@ -248,10 +249,9 @@ class PredictionModel(nn.Module):
         for i, trans in enumerate(self.transitions):
             previous = latents[i]
             predictions.append(trans(previous))
+        return predictions
 
-        return torch.cat(predictions, 1)
-
-    def forward(self, sequence, motion_weight=0):
+    def forward(self, sequence):
         output = {
             'generations': [],
             'context': None,
@@ -260,14 +260,13 @@ class PredictionModel(nn.Module):
         }
 
         conditioning_frames = torch.cat(sequence[:2], 1)
-        print("Conditioning frames: ", conditioning_frames.size())
-        ipdb.set_trace()
         factored_latents = [factored_inference(conditioning_frames)
                             for factored_inference in self.factored_inferences]
 
         context = self.context_inference(sequence[1])
         output['context'] = context
-        for t in range(len(sequence)):
+        for t in range(1, len(sequence)):
+            output['latents'].append(factored_latents)
             generation = self.render(context, factored_latents)
             output['generations'].append(generation)            
 
@@ -283,30 +282,39 @@ class PredictionModel(nn.Module):
         cat_latents = torch.cat(total_latents, 1)
         return self.generator(cat_latents)
 
-    def generate_independent(self, sequence):
+    def generate_independent(self, sequence, steps, sampling):
         conditioning_frames = torch.cat(sequence[:2], 1)
         factored_latents = [factored_inference(conditioning_frames)
                             for factored_inference in self.factored_inferences]
         initial_factored_latents = factored_latents
 
         context = self.context_inference(sequence[1])
-        generations = []
-        for t in range(len(sequence)):
-            generations_t = []
+        generations = torch.zeros(self.n_latents + 1, steps,
+                                  sequence[0].size(0), *self.image_dim)
+        
+        # first row will be the true sequence
+        generations[0, :len(sequence)].copy_(torch.stack(sequence).data)
+        # first timestep will be from the true sequence
+        for latent in range(self.n_latents):
+            generations[latent + 1, 0].copy_(sequence[0].data)
+        for t in range(1, steps):
             for latent in range(self.n_latents):
                 current_latents = [l for l in initial_factored_latents]
                 current_latents[latent] = factored_latents[latent]
 
                 generation = self.render(context, current_latents)
-                generations_t.append(generation)
-            generations.append(generations_t)
+                generations[latent + 1, t].copy_(generation.data)
+            # generations.append(generations_t)
 
-            if t < len(sequence) - 1:
+            if t < steps - 1:
                 factored_latents = self.predict_latent(factored_latents)
-
+        # transpose the generations so that each row will be 
+        # a single latent changing across time
+        # list(map(list, zip(*generations)))
         return generations
 
     def generate_interpolations(self, sequence, steps, scale=1):
+        context = self.context_inference(sequence[1])
         conditioning_frames = torch.cat(sequence[:2], 1)
         factored_latents = [factored_inference(conditioning_frames)
                             for factored_inference in self.factored_inferences]
@@ -319,14 +327,13 @@ class PredictionModel(nn.Module):
 
         generations = torch.Tensor(self.n_latents, steps, opt.batch_size,
                                    *self.image_dim)
-        generations[:, 0].copy_(sequence[0].data)
         for latent in range(self.n_latents):
             for t, alpha in enumerate(torch.linspace(-1, 1, steps)):
                 current_latents = [l for l in initial_factored_latents]
-                current_latents[latent] += noise * alpha
+                current_latents[latent] = current_latents[latent] + noise * alpha
 
                 generated_frame = self.render(context, current_latents)
-                generations[z_i, t + priming_steps].copy_(generated_frame)
+                generations[latent, t].copy_(generated_frame.data)
         return generations
 
 
@@ -352,9 +359,11 @@ class IndependentModel(nn.Module):
 
         total_z_dim = n_latents * self.hidden_dim
 
-        self.transitions = nn.ModuleList([transition(self.hidden_dim,
-                                                     layers=opt.trans_layers)
-                                          for _ in range(n_latents)])
+        self.transitions = nn.ModuleList([transition(self.hidden_dim * 2,
+                                                    self.hidden_dim,
+                                                    layers=opt.trans_layers)
+                                        for _ in range(n_latents)])
+
 
         self.inference = inference(self.image_dim, total_z_dim)
         self.generator = generator(total_z_dim, self.image_dim)
@@ -637,7 +646,8 @@ class DeterministicModel(nn.Module):
             torch.cat([single_z1[1] for _ in range(n_latents)], 1)
         )
 
-        self.transitions = nn.ModuleList([transition(self.hidden_dim,
+        self.transitions = nn.ModuleList([transition(self.hidden_dim * 2,
+                                                     self.hidden_dim,
                                                      layers=opt.trans_layers)
                                           for _ in range(n_latents)])
 

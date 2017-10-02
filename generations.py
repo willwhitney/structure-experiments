@@ -101,24 +101,21 @@ def extract_kth_sequence(full_sequence, k):
 
 @ensure_path_exists
 def save_independent_gen(path, model, priming, sampling=True):
-    if sampling and isinstance(model, DeterministicModel):
-        return
     for p in priming:
         p.volatile = True
 
     # save samples with only one latent evolving
-    if isinstance(model, IndependentModel):
-        samples = model.generate_independent(priming, 20, sampling)
-        for j in range(10):
-            # image is one batch element of every timestep and every latent
-            image = samples[:, :, j]
-            save_tensors_image(path +str(j)+'.png', image)
+    samples = model.generate_independent(priming, 20, sampling)
+    for j in range(10):
+        # image is one batch element of every timestep and every latent
+        image = samples[:, :, j]
+        save_tensors_image(path +str(j)+'.png', image)
 
-            # stacked is a list of images where each image is the concatenated
-            # predictions from each latent at one timestep
-            stacked = [image_tensor(image[:, t])
-                       for t in range(len(image[0]))]
-            save_gif(path + str(j) + '.gif', stacked)
+        # stacked is a list of images where each image is the concatenated
+        # predictions from each latent at one timestep
+        stacked = [image_tensor(image[:, t])
+                    for t in range(len(image[0]))]
+        save_gif(path + str(j) + '.gif', stacked)
 
 @ensure_path_exists
 def save_independent_resample(path, model, priming):
