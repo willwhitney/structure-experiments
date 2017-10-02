@@ -99,7 +99,9 @@ class IndependenceAdversary(nn.Module):
         self.latent_dim = latent_dim
         self.factors = factors
 
-        self.adversary = Adversary(latent_dim * factors, latent_dim, n_layers=4)
+        self.adversary = Adversary(latent_dim * factors,
+                                   hidden_dim=100, 
+                                   n_layers=4)
 
     def forward(self, latents_a, latents_b):
         outputs = {

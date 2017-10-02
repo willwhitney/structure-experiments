@@ -219,10 +219,12 @@ while i < opt.max_steps:
 
 
     # ---- train the adversary -----
-    other_sequence = next(training_batch_generator)
-    other_output = autoencoder(adversary, other_sequence[0])
-    adversary_output = adversary(autoencoder_output['latents'],
-                                 other_output['latents'])
+    other_sequence_a = next(training_batch_generator)
+    other_sequence_b = next(training_batch_generator)
+    other_output_a = autoencoder(adversary, other_sequence_a[0])
+    other_output_b = autoencoder(adversary, other_sequence_b[0])
+    adversary_output = adversary(other_output_a['latents'],
+                                 other_output_b['latents'])
 
     true_loss = adversary_output['true_loss']
     false_loss = adversary_output['false_loss']
