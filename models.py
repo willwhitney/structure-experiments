@@ -222,7 +222,112 @@ class IndependentAutoencoder(nn.Module):
         
 
 
+class PredictionModel(nn.Module):
+    def __init__(self, n_latents, hidden_dim, context_dim, img_size,
+                 transition=Transition,
+                 inference=DeterministicTinyDCGANFirstInference, 
+                 generator=DeterministicTinyDCGANGenerator):
+        super().__init__()
+        self.n_latents = n_latents
+        self.hidden_dim = hidden_dim
+        self.image_dim = [opt.channels, img_size, img_size]
 
+        self.transitions = nn.ModuleList([transition(self.hidden_dim,
+                                                     layers=opt.trans_layers)
+                                          for _ in range(n_latents)])
+
+        total_z_dim = n_latents * hidden_dim + context_dim
+        twoimage_dim = [2 * opt.channels, img_size, img_size]
+        self.context_inference = inference(self.image_dim, context_dim)
+        self.factored_inferences = nn.ModuleList([
+            inference(twoimage_dim, hidden_dim) for _ in range(n_latents)])
+        self.generator = generator(total_z_dim, self.image_dim)
+
+    def predict_latent(self, latents):
+        predictions = []
+        for i, trans in enumerate(self.transitions):
+            previous = latents[i]
+            predictions.append(trans(previous))
+
+        return torch.cat(predictions, 1)
+
+    def forward(self, sequence, motion_weight=0):
+        output = {
+            'generations': [],
+            'context': None,
+            'latents': [],
+            'loss': Variable(torch.zeros(1).type(dtype)),
+        }
+
+        conditioning_frames = torch.cat(sequence[:2], 1)
+        print("Conditioning frames: ", conditioning_frames.size())
+        ipdb.set_trace()
+        factored_latents = [factored_inference(conditioning_frames)
+                            for factored_inference in self.factored_inferences]
+
+        context = self.context_inference(sequence[1])
+        output['context'] = context
+        for t in range(len(sequence)):
+            generation = self.render(context, factored_latents)
+            output['generations'].append(generation)            
+
+            if t < len(sequence) - 1:
+                factored_latents = self.predict_latent(factored_latents)
+
+        output['loss'] = mse_loss(torch.cat(output['generations'], 0),
+                                  torch.cat(sequence[1:], 0))
+        return output
+
+    def render(self, context, factored_latents):
+        total_latents = [context] + factored_latents
+        cat_latents = torch.cat(total_latents, 1)
+        return self.generator(cat_latents)
+
+    def generate_independent(self, sequence):
+        conditioning_frames = torch.cat(sequence[:2], 1)
+        factored_latents = [factored_inference(conditioning_frames)
+                            for factored_inference in self.factored_inferences]
+        initial_factored_latents = factored_latents
+
+        context = self.context_inference(sequence[1])
+        generations = []
+        for t in range(len(sequence)):
+            generations_t = []
+            for latent in range(self.n_latents):
+                current_latents = [l for l in initial_factored_latents]
+                current_latents[latent] = factored_latents[latent]
+
+                generation = self.render(context, current_latents)
+                generations_t.append(generation)
+            generations.append(generations_t)
+
+            if t < len(sequence) - 1:
+                factored_latents = self.predict_latent(factored_latents)
+
+        return generations
+
+    def generate_interpolations(self, sequence, steps, scale=1):
+        conditioning_frames = torch.cat(sequence[:2], 1)
+        factored_latents = [factored_inference(conditioning_frames)
+                            for factored_inference in self.factored_inferences]
+        initial_factored_latents = factored_latents
+
+        noise = Variable(torch.zeros(factored_latents[0].size(0),
+                                     self.hidden_dim).normal_(0, 1).type(dtype))
+        for batch_noise in noise.data:
+            batch_noise.div_(batch_noise.norm()).mul_(scale)
+
+        generations = torch.Tensor(self.n_latents, steps, opt.batch_size,
+                                   *self.image_dim)
+        generations[:, 0].copy_(sequence[0].data)
+        for latent in range(self.n_latents):
+            for t, alpha in enumerate(torch.linspace(-1, 1, steps)):
+                current_latents = [l for l in initial_factored_latents]
+                current_latents[latent] += noise * alpha
+
+                generated_frame = self.render(context, current_latents)
+                generations[z_i, t + priming_steps].copy_(generated_frame)
+        return generations
 
 
 class IndependentModel(nn.Module):
@@ -781,7 +886,8 @@ class MSEModel(nn.Module):
 
         reshaped_sequence = sequence
         if isinstance(self.inference, ConvInference):
-            reshaped_sequence = [x.resize(x.size(0), opt.channels, self.img_size, self.img_size)
+            reshaped_sequence = [x.resize(x.size(0), opt.channels,
+                                          self.img_size, self.img_size)
                                  for x in sequence]
         # reshaped_sequence = [x.transpose(2, 3).transpose(1, 2)
         #                      for x in reshaped_sequence]
@@ -817,7 +923,6 @@ class MSEModel(nn.Module):
 
             # z_var_mean += z_prior[1].mean().data[0]
 
-            # z_var_mean = z_var_mean / (len(sequence) - 1) if len(sequence) > 1 else -1
         return (generations,
                 loss / (len(sequence) - 1),
                 999,
@@ -827,7 +932,8 @@ class MSEModel(nn.Module):
         generations = [priming[0]]
 
         if isinstance(self.inference, ConvInference):
-            priming = [x.resize(x.size(0), opt.channels, self.img_size, self.img_size)
+            priming = [x.resize(x.size(0), opt.channels,
+                                self.img_size, self.img_size)
                        for x in priming]
         # priming = [x.transpose(2, 3).transpose(1, 2)
         #                      for x in priming]
@@ -908,8 +1014,6 @@ class VAEModel(nn.Module):
 
             if t < len(sequence) - 1:
                 z_prior = self.transition(z_sample)
-                # z_prior = (z_prior[0],
-                #            Variable(torch.ones(z_prior[1].size()) * 5e-2).type(dtype))
                 inferred_z_post = self.inference(
                     reshaped_sequence[t + 1], z_sample)
 

@@ -77,4 +77,5 @@ parser.add_argument('--channels', default=3, type=int)
 
 
 parser.add_argument('--adversarial-weight', default=0.01, type=float)
+parser.add_argument('--context_dim', default=50, type=int)
 opt = parser.parse_args()
