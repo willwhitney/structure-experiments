@@ -1,5 +1,6 @@
 import os
 import sys
+import itertools
 
 dry_run = '--dry-run' in sys.argv
 local = '--local' in sys.argv
@@ -15,6 +16,7 @@ basename = "pred-slurm"
 grids = [
     {
         'no-git': [True],
+        'data': ['mmnist'],
         'seq-len': [5],
         'image-width': [32],
         'adversarial-weight': [1, 0.1, 0.001, 0.0001],
@@ -24,10 +26,10 @@ grids = [
 jobs = []
 for grid in grids:
     individual_options = [[{key: value} for value in values]
-                        for key, values in grid.items()]
+                          for key, values in grid.items()]
     product_options = list(itertools.product(*individual_options))
     jobs += [{k: v for d in option_set for k, v in d.items()}
-            for option_set in product_options]
+             for option_set in product_options]
 
 if dry_run:
     print("NOT starting jobs:")
@@ -82,5 +84,5 @@ for job in jobs:
 
         if not dry_run:
             os.system((
-                "sbatch -N 1 -c 2 --gres=gpu:1 --mem=8000 "
+                "sbatch -N 1 -c 3 --gres=gpu:1 --mem=60000 "
                 "--time=2-00:00:00 slurm_scripts/" + jobname + ".slurm &"))
