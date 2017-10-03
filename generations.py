@@ -100,12 +100,12 @@ def extract_kth_sequence(full_sequence, k):
 #             save_gif(path + str(j) + '.gif', stacked)
 
 @ensure_path_exists
-def save_independent_gen(path, model, priming, sampling=True):
+def save_independent_gen(path, model, priming, sampling=True, steps=20):
     for p in priming:
         p.volatile = True
 
     # save samples with only one latent evolving
-    samples = model.generate_independent(priming, 20, sampling)
+    samples = model.generate_independent(priming, steps, sampling)
     for j in range(10):
         # image is one batch element of every timestep and every latent
         image = samples[:, :, j]
@@ -136,7 +136,7 @@ def save_interpolation(path, model, priming):
     for p in priming:
         p.volatile = True
 
-    samples = model.generate_interpolations(priming, 50)
+    samples = model.generate_interpolations(priming, 49)
     for j in range(10):
         image = samples[:, :, j]
         save_tensors_image(path + str(j)+'.png', image)

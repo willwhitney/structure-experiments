@@ -232,8 +232,8 @@ class PredictionModel(nn.Module):
         self.hidden_dim = hidden_dim
         self.image_dim = [opt.channels, img_size, img_size]
 
-        self.transitions = nn.ModuleList([transition(self.hidden_dim,
-                                                     self.hidden_dim,
+        self.transitions = nn.ModuleList([transition(hidden_dim,
+                                                     128,
                                                      layers=opt.trans_layers)
                                           for _ in range(n_latents)])
 
@@ -273,6 +273,7 @@ class PredictionModel(nn.Module):
             if t < len(sequence) - 1:
                 factored_latents = self.predict_latent(factored_latents)
 
+        # ipdb.set_trace()
         output['loss'] = mse_loss(torch.cat(output['generations'], 0),
                                   torch.cat(sequence[1:], 0))
         return output

@@ -43,7 +43,9 @@ else:
     model = PredictionModel(opt.latents,
                             opt.latent_dim, 
                             opt.context_dim, 
-                            opt.image_width).type(dtype)
+                            opt.image_width,
+                            inference=DeterministicDCGANFirstInference,
+                            generator=DeterministicDCGANGenerator).type(dtype)
 
 opt.save = 'results/' + opt.name
 print(model)
@@ -132,7 +134,7 @@ def make_log(step, state):
         volatile_sequence, [volatile_sequence[0]] + generated_sequence)
     generations.save_independent_gen(
         os.path.join(opt.save, "ind_gen", str(step) + '-'),
-        model, volatile_sequence, sampling=False)
+        model, volatile_sequence, sampling=False, steps=len(volatile_sequence))
     generations.save_interpolation(
         os.path.join(opt.save, "interp", str(step) + '-'),
         model, volatile_sequence)
@@ -162,6 +164,7 @@ def get_training_batch():
 
 training_batch_generator = get_training_batch()
 
+
 while i < opt.max_steps:
     i += opt.batch_size
     sequence = next(training_batch_generator)
@@ -170,6 +173,9 @@ while i < opt.max_steps:
     output = model(sequence)
     generated_sequence = output['generations']
     loss = output['loss']
+
+    # if 20000 <= i <= 20100:
+    #     ipdb.set_trace()
 
     model.zero_grad()
     loss.backward()

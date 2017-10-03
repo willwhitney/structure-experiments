@@ -44,6 +44,8 @@ class Transition(nn.Module):
         current = inputs
         if is_sequence(inputs):
             current = self.input_lin(torch.cat(inputs, 1))
+        else:
+            current = self.input_lin(inputs)
         current = activation(current)
         for layer in self.layers:
             current = layer(current)
@@ -62,12 +64,10 @@ class DeterministicTransition(nn.Module):
         self.layers = nn.ModuleList([nn.Linear(self.dim, self.dim)
                                      for _ in range(layers)])
 
-        self.output_lin = nn.Linear(self.dim, self.dim)
+        self.output_lin = nn.Linear(self.dim, input_dim)
 
     def forward(self, inputs):
-        current = inputs
-        if is_sequence(inputs):
-            current = self.input_lin(torch.cat(inputs, 1))
+        current = self.input_lin(inputs)
         current = activation(current)
         for layer in self.layers:
             current = layer(current)

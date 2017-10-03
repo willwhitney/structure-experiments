@@ -28,7 +28,7 @@ class MovingMNIST(data.Dataset):
         print("Generating dataset:")
         for i in pbar(range(self.data_size)):
             self.data.append(
-                    torch.from_numpy(self.data_handler.GetItem()) / 255)
+                    torch.from_numpy(self.data_handler.GetItem()))
 
     def __getitem__(self, index):
         return self.data[index]
