@@ -44,8 +44,8 @@ else:
     autoencoder = IndependentAutoencoder(
         opt.latents, opt.latent_dim,
         opt.image_width,
-        inference=DeterministicTinyDCGANFirstInference,
-        generator=DeterministicTinyDCGANGenerator).type(dtype)
+        inference=DeterministicDCGANFirstInference,
+        generator=DeterministicDCGANGenerator).type(dtype)
 
 opt.save = 'results/' + opt.name
 print(adversary)

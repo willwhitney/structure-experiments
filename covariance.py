@@ -10,6 +10,7 @@ import scipy.misc
 import random
 import math
 import os
+import ipdb
 from PIL import Image
 import progressbar
 import logging
@@ -18,9 +19,21 @@ import matplotlib.pyplot as plt
 import seaborn
 import pandas as pd
 import sklearn.covariance
+from entropy_estimators import mi as mutual_information
 
 from util import ensure_path_exists
 
+
+def batch_select(x, latent_dim, start=None, end=None):
+    start_loc = None if start is None else start * latent_dim
+    end_loc = None if end is None else (end + 1) * latent_dim
+
+    try:
+        result = x[:, start_loc: end_loc]
+    except ValueError as e:
+        return Variable().type(dtype)
+
+    return result
 
 @ensure_path_exists
 def construct_covariance(savedir, list_of_samples, latent_dim, label):
@@ -29,6 +42,7 @@ def construct_covariance(savedir, list_of_samples, latent_dim, label):
 
     tensor_of_samples = torch.stack(list_of_samples, 0)
     data = tensor_of_samples.cpu().numpy()
+
 
     df = pd.DataFrame(data)
     corr_df = df.corr()
@@ -64,6 +78,13 @@ def construct_covariance(savedir, list_of_samples, latent_dim, label):
     name = "{}cov_{}.pdf".format(savedir, label)
     plt.savefig(name)
     plt.close(fig)
+
+    list_of_latents_samples = [batch_select(tensor_of_samples, latent_dim,
+                                            start=i, end=i).cpu().numpy()
+                                for i in range(n_latents)]
+
+    return mutual_information(list_of_latents_samples[0],
+                              list_of_latents_samples[1])
 
 
 if __name__ == "__main__":
