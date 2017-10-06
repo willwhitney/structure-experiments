@@ -436,10 +436,10 @@ def ensure_path_exists(fn):
     """
     def wrapper(path, *args, **kwargs):
         try:
-            fn(path, *args, **kwargs)
+            return fn(path, *args, **kwargs)
         except FileNotFoundError:
             os.makedirs(os.path.dirname(path), exist_ok=True)
-            fn(path, *args, **kwargs)
+            return fn(path, *args, **kwargs)
     return wrapper
 
 def mean_of_means(tensor_list):

@@ -14,6 +14,7 @@ import ipdb
 from PIL import Image
 import progressbar
 import logging
+import itertools
 
 import matplotlib.pyplot as plt
 import seaborn
@@ -83,8 +84,12 @@ def construct_covariance(savedir, list_of_samples, latent_dim, label):
                                             start=i, end=i).cpu().numpy()
                                 for i in range(n_latents)]
 
-    return mutual_information(list_of_latents_samples[0],
-                              list_of_latents_samples[1])
+    MIs = []
+    for a, b in itertools.combinations(list_of_latents_samples, 2):
+        # ipdb.set_trace()
+        MIs.append(mutual_information(a, b))
+
+    return sum(MIs) / len(MIs)
 
 
 if __name__ == "__main__":

@@ -187,9 +187,10 @@ def save_checkpoint(step, state):
     torch.save(save_dict, opt.save + '/model.t7')
 
 def save_covariance(step, state):
-    construct_covariance(opt.save + '/covariance/',
-                         cov_latents, opt.latent_dim,
-                         label='train_' + str(step))
+    mean_MI = construct_covariance(opt.save + '/covariance/',
+                                   cov_latents, opt.latent_dim,
+                                   label='train_' + str(step))
+    print(mean_MI)
     cov_latents.clear()
 
 
