@@ -98,11 +98,25 @@ def save_gif(filename, inputs, bounce=False, duration=0.2):
     imageio.mimsave(filename, images, duration=duration)
 
 def show(img_tensor):
-    output_tensor = img_tensor.transpose(0,1).transpose(1,2)
-    f = plt.figure()
-    plt.imshow(output_tensor.numpy())
+    if img_tensor.dim() > 2:
+        img_tensor = img_tensor.transpose(0, 1).transpose(1, 2)
+    # f = plt.figure()
+    # plt.imshow(output_tensor.numpy())
+    # plt.show()
+    # plt.close(f)
+    img_tensor = img_tensor.squeeze()
+    max_size = 12
+    max_input_size = max(img_tensor.size(0), img_tensor.size(1))
+    figsize = (torch.Tensor((img_tensor.size(1), img_tensor.size(0)))
+               * max_size / max_input_size).ceil()
+
+    fig = plt.figure(figsize=list(figsize))
+    if img_tensor.dim() == 2:
+        plt.gray()
+
+    plt.imshow(inverse_transform(img_tensor.numpy()), interpolation='bilinear')
     plt.show()
-    plt.close(f)
+    plt.close(fig)
 
 
 def clip_grad_norm(parameters, max_norm, norm_type=2):
