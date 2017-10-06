@@ -23,14 +23,11 @@ from util import ensure_path_exists
 
 
 @ensure_path_exists
-def construct_covariance(savedir, list_of_lists_of_latents):
-    latent_dim = list_of_lists_of_latents[0][0].size()[0]
-    n_latents = len(list_of_lists_of_latents[0])
+def construct_covariance(savedir, list_of_samples, latent_dim, label):
+    z_dim = list_of_samples[0].size(0)
+    n_latents = z_dim // latent_dim
 
-    list_of_samples = [torch.cat(sample, 0)
-                       for sample in list_of_lists_of_latents]
     tensor_of_samples = torch.stack(list_of_samples, 0)
-    z_dim = tensor_of_samples.size(1)
     data = tensor_of_samples.cpu().numpy()
 
     df = pd.DataFrame(data)
@@ -48,13 +45,13 @@ def construct_covariance(savedir, list_of_lists_of_latents):
                  color='black', linewidth=0.5)
         plt.plot([location, location], [0, z_dim],
                  color='black', linewidth=0.5)
-    name = "{}/corr_{}.pdf".format(savedir, label)
+    name = "{}corr_{}.pdf".format(savedir, label)
     plt.savefig(name)
     plt.close(fig)
 
     fig = plt.figure()
     cov = np.array(df.cov())
-    hm = seaborn.heatmap(cov[:z_dim, z_dim:],
+    hm = seaborn.heatmap(cov,
                          xticklabels=latent_dim,
                          yticklabels=latent_dim)
 
@@ -64,7 +61,7 @@ def construct_covariance(savedir, list_of_lists_of_latents):
                  color='black', linewidth=0.5)
         plt.plot([location, location], [0, z_dim],
                  color='black', linewidth=0.5)
-    name = "{}/cov_{}.pdf".format(savedir, label)
+    name = "{}cov_{}.pdf".format(savedir, label)
     plt.savefig(name)
     plt.close(fig)
 

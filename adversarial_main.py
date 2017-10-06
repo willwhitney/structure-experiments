@@ -106,6 +106,7 @@ adversary_optimizer = optim.Adam(
 
 # --------- set up bookkeeper and its functions ---------------
 sequence, reconstruction = None, None
+cov_latents = []
 
 
 def reset_state(state):
@@ -185,12 +186,17 @@ def save_checkpoint(step, state):
     }
     torch.save(save_dict, opt.save + '/model.t7')
 
-
+def save_covariance(step, state):
+    construct_covariance(opt.save + '/covariance/',
+                         cov_latents, opt.latent_dim,
+                         label='train_' + str(step))
+    cov_latents.clear()
 
 
 bookkeeper = Bookkeeper(i, reset_state({}), update_reducer)
 bookkeeper.every(opt.print_every, make_log)
 bookkeeper.every(opt.save_every, save_checkpoint)
+bookkeeper.every(opt.cov_every, save_covariance)
 
 def get_training_batch():
     while True:
@@ -219,12 +225,10 @@ while i < opt.max_steps:
 
 
     # ---- train the adversary -----
-    other_sequence_a = next(training_batch_generator)
-    other_sequence_b = next(training_batch_generator)
-    other_output_a = autoencoder(adversary, other_sequence_a[0])
-    other_output_b = autoencoder(adversary, other_sequence_b[0])
-    adversary_output = adversary(other_output_a['latents'],
-                                 other_output_b['latents'])
+    other_sequence = next(training_batch_generator)
+    other_output = autoencoder(adversary, other_sequence[0])
+    adversary_output = adversary(autoencoder_output['latents'],
+                                 other_output['latents'])
 
     true_loss = adversary_output['true_loss']
     false_loss = adversary_output['false_loss']
@@ -233,6 +237,9 @@ while i < opt.max_steps:
     adversary.zero_grad()
     adversary_loss.backward()
     adversary_optimizer.step()
+
+    cov_latents.extend(list(autoencoder_output['latents'].data))
+    cov_latents.extend(list(other_output['latents'].data))
 
 
     bookkeeper.update(i, {
