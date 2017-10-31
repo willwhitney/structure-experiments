@@ -15,7 +15,7 @@ from mlp_modules import *
 from conv_modules import *
 from loss_modules import *
 
-from adversarial_modules import *
+# from adversarial_modules import *
 
 if opt.activation == 'lrelu':
     activation = F.leaky_relu

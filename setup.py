@@ -183,24 +183,24 @@ def load_dataset(opt):
                 opt.channels, opt.image_width, opt.seq_len)
             dataset_path = os.path.join(data_path, dataset_name)
 
-            if os.path.exists(dataset_path):
-                data_cp = torch.load(dataset_path)
-                train_data = data_cp['train']
-                test_data = data_cp['test']
-            else:
-                train_data = MovingMNIST(train=True,
-                                         seq_len=opt.seq_len,
-                                         image_size=opt.image_width,
-                                         colored=(opt.channels == 3))
-                test_data = MovingMNIST(train=False,
-                                         seq_len=opt.seq_len,
-                                         image_size=opt.image_width,
-                                         colored=(opt.channels == 3))
+            # if os.path.exists(dataset_path):
+            #     data_cp = torch.load(dataset_path)
+            #     train_data = data_cp['train']
+            #     test_data = data_cp['test']
+            # else:
+            train_data = MovingMNIST(train=True,
+                                        seq_len=opt.seq_len,
+                                        image_size=opt.image_width,
+                                        colored=(opt.channels == 3))
+            test_data = MovingMNIST(train=False,
+                                        seq_len=opt.seq_len,
+                                        image_size=opt.image_width,
+                                        colored=(opt.channels == 3))
                 # pdb.set_trace()
-                torch.save({
-                    'train': train_data,
-                    'test': test_data,
-                }, dataset_path)
+                # torch.save({
+                #     'train': train_data,
+                #     'test': test_data,
+                # }, dataset_path)
             load_workers = 1
 
         # other video datasets are big and stored as chunks

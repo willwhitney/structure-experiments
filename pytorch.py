@@ -18,6 +18,8 @@ import shutil
 import time
 import traceback
 
+import ipdb
+
 from util import *
 
 from modules import *
@@ -46,16 +48,16 @@ else:
     i = 0
     if opt.tiny:
         model = modeltype(opt.latents,
-                                 opt.latent_dim,
-                                 opt.image_width,
-                                 transition=Transition,
-                                 first_inference=TinyDCGANFirstInference,
-                                 inference=TinyDCGANInference,
-                                 generator=TinyDCGANGenerator).type(dtype)
+                          opt.latent_dim,
+                          opt.image_width,
+                          transition=Transition,
+                          first_inference=TinyDCGANFirstInference,
+                          inference=TinyDCGANInference,
+                          generator=TinyDCGANGenerator).type(dtype)
     else:
         model = modeltype(opt.latents,
-                                 opt.latent_dim,
-                                 opt.image_width).type(dtype)
+                          opt.latent_dim,
+                          opt.image_width).type(dtype)
 
 opt.save = 'results/' + opt.name
 print(model)
@@ -244,16 +246,6 @@ while i < opt.max_steps:
         nll = output['seq_nll']
         seq_divergence = output['seq_divergence']
 
-        # accumulate the variances for randomizing and nonrandomizing frames
-        if opt.data == 'random_balls':
-            for t in range(opt.seq_len - 1):
-                for b in range(opt.batch_size):
-                    mean = p_vars[t][b].data.mean()
-                    if randomize[t][b] == 1:
-                        random_mean_vars.append(mean)
-                    else:
-                        norandom_mean_vars.append(mean)
-
         # scale the KL however appropriate
         kl_penalty = seq_divergence * opt.kl_weight
         if opt.kl_anneal:
@@ -267,14 +259,6 @@ while i < opt.max_steps:
 
         optimizer.step()
         scheduler.step()
-
-        if opt.data == 'random_balls' and i % opt.print_every == 0 and i > 0:
-            print("Variance on randomizing frames: {}".format(
-                    sum(random_mean_vars) / len(random_mean_vars)))
-            print("Variance on non-randomizing frames: {}".format(
-                    sum(norandom_mean_vars) / len(norandom_mean_vars)))
-            random_mean_vars = []
-            norandom_mean_vars = []
 
         if i >= opt.max_steps:
             break
