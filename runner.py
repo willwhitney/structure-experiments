@@ -12,18 +12,19 @@ if not os.path.exists("slurm_logs"):
 if not os.path.exists("slurm_scripts"):
     os.makedirs("slurm_scripts")
 
-basename = "cmmnist"
+basename = "cmmnist_deter_latents2"
 grids = [
     {
+        'model': ['deterministic'],
         'force': [True],
         'no-git': [True],
-        'lr': [1e-3],
+        'lr': [3e-4],
         'loss': ['bce'],
-        'latents': [1],
+        'latents': [2],
         'latent-dim': [100],
         'tiny': [True],
         'trans-layers': [2],
-        'kl-weight': [1, 0.3, 0.1, 0.03],
+        'kl-weight': [1, 3, 10, 30],
     }
 ]
 

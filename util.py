@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import imageio
 import sys
 import pdb
+import ipdb
 import shutil
 import git
 from torch.autograd import Variable
@@ -96,6 +97,7 @@ def save_gif(filename, inputs, bounce=False, duration=0.2):
     if bounce:
         images = images + list(reversed(images[1:-1]))
     imageio.mimsave(filename, images, duration=duration)
+
 
 def show(img_tensor):
     if img_tensor.dim() > 2:
@@ -434,10 +436,10 @@ def ensure_path_exists(fn):
     """
     def wrapper(path, *args, **kwargs):
         try:
-            fn(path, *args, **kwargs)
+            return fn(path, *args, **kwargs)
         except FileNotFoundError:
             os.makedirs(os.path.dirname(path), exist_ok=True)
-            fn(path, *args, **kwargs)
+            return fn(path, *args, **kwargs)
     return wrapper
 
 def mean_of_means(tensor_list):
