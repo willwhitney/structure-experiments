@@ -116,6 +116,7 @@ class IndependentModel(nn.Module):
         total_z_dim = n_latents * self.hidden_dim
 
         self.transitions = nn.ModuleList([transition(self.hidden_dim,
+                                                     128,
                                                      layers=opt.trans_layers)
                                           for _ in range(n_latents)])
 
