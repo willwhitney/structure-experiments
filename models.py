@@ -123,15 +123,28 @@ class IndependentModel(nn.Module):
         self.inference = inference(self.image_dim, total_z_dim)
         self.generator = generator(total_z_dim, self.image_dim)
 
-    def predict_latent(self, latents):
-        (latent1, latent2) = latents
+    # def predict_latent(self, latents):
+    #     (latent1, latent2) = latents
+    #     z_prior = []
+    #     for i, trans in enumerate(self.transitions):
+    #         previous1 = latent1[:, i *
+    #                             self.hidden_dim: (i + 1) * self.hidden_dim]
+    #         previous2 = latent2[:, i *
+    #                             self.hidden_dim: (i + 1) * self.hidden_dim]
+    #         z_prior.append(trans((previous1, previous2)))
+
+    #     cat_prior = (torch.cat([prior[0] for prior in z_prior], 1),
+    #                  torch.cat([prior[1] for prior in z_prior], 1))
+    #     return cat_prior
+
+    def predict_latent(self, latent):
         z_prior = []
         for i, trans in enumerate(self.transitions):
-            previous1 = latent1[:, i *
+            previous = latent[:, i *
                                 self.hidden_dim: (i + 1) * self.hidden_dim]
-            previous2 = latent2[:, i *
-                                self.hidden_dim: (i + 1) * self.hidden_dim]
-            z_prior.append(trans((previous1, previous2)))
+            # previous2 = latent2[:, i *
+            #                     self.hidden_dim: (i + 1) * self.hidden_dim]
+            z_prior.append(trans(previous))
 
         cat_prior = (torch.cat([prior[0] for prior in z_prior], 1),
                      torch.cat([prior[1] for prior in z_prior], 1))
@@ -207,7 +220,8 @@ class IndependentModel(nn.Module):
 
             if t < len(sequence) - 1:
                 if t >= start_trans_div - 1:
-                    cat_prior = self.predict_latent((latents[-2], latents[-1]))
+                    # cat_prior = self.predict_latent((latents[-2], latents[-1]))
+                    cat_prior = self.predict_latent(latents[-1])
                     output['prior_variances'].append(cat_prior[1])
                 else:
                     cat_prior = self.z1_prior
