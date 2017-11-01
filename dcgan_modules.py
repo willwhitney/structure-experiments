@@ -63,8 +63,7 @@ class DCGANGenerator(nn.Module):
         # import pdb; pdb.set_trace()
 
         self.convs = nn.ModuleList()
-
-        # print(self.in_dims)
+        self.bns = nn.ModuleList()
         for l in range(1, len(self.planes)):
             in_height, in_width = self.in_dims[l]
             self.convs.append(nn.ConvTranspose2d(self.planes[l-1],
@@ -72,6 +71,8 @@ class DCGANGenerator(nn.Module):
                                         self.kernels[l],
                                         stride=self.strides[l],
                                         padding=self.pads[l]))
+            if l < len(self.planes) - 1:
+                self.bns.append(nn.BatchNorm2d(self.planes[l]))
 
         self.convs[-1].bias.data.add_(0.5)
 
@@ -84,12 +85,14 @@ class DCGANGenerator(nn.Module):
         current = current.resize(current.size(0),
                                  self.planes[0],
                                  *self.in_dims[0])
-        for conv in self.convs:
+        for i, conv in enumerate(self.convs):
             current = F.relu(current)
             # current = self.upsample(current)
             current = conv(current)
+            if i < len(self.convs) - 1:
+                current = self.bns[i](current)
 
-        mu = F.leaky_relu(current[:, : int(current.size(1) / 2)])
+        mu = F.sigmoid(current[:, : int(current.size(1) / 2)])
         sigma = Variable(torch.ones(mu.size()).type(dtype) * opt.output_var)
         return (mu, sigma)
 
@@ -124,7 +127,9 @@ class DCGANInference(nn.Module):
                 self.kernels[l],
                 padding=self.pads[l],
                 stride=self.strides[l])))
+
         self.convs = nn.ModuleList()
+        self.conv_bns = nn.ModuleList()
         for l in range(len(self.planes)):
             # confusingly this is actually offset by 1
             in_planes, in_height, in_width = self.out_dims[l]
@@ -134,11 +139,11 @@ class DCGANInference(nn.Module):
                                         self.kernels[l],
                                         padding=self.pads[l],
                                         stride=self.strides[l]))
-
-        # self.conv1 = nn.Conv2d(input_dims[0], 32, 3)
+            if l < len(self.planes) - 1:
+                self.conv_bns.append(nn.BatchNorm2d(int(self.planes[l])))
 
         self.input_lin = nn.Linear(prod(self.out_dims[-1]), hidden_dim)
-        self.joint_lin = nn.Linear(hidden_dim * 2, hidden_dim)
+        self.joint_lin = nn.Linear(hidden_dim * 3, hidden_dim)
         # self.layers = nn.ModuleList([nn.Linear(hidden_dim, hidden_dim)
         #                              for _ in range(2)])
 
@@ -147,16 +152,18 @@ class DCGANInference(nn.Module):
         self.lin_sigma = nn.Linear(hidden_dim, self.hidden_dim)
 
 
-    def forward(self, x_t, z_prev):
+    def forward(self, x_t, z_dist_pred):
         current = x_t
-        for conv in self.convs:
+        for i, conv in enumerate(self.convs):
             current = conv(current)
+            if i < len(self.convs) - 1:
+                current = self.conv_bns[i](current)
             current = F.leaky_relu(current)
         current = current.resize(current.size(0), prod(self.out_dims[-1]))
         current = self.input_lin(current)
         current = F.leaky_relu(current)
 
-        joined = torch.cat([current, z_prev], 1)
+        joined = torch.cat([current, *z_dist_pred], 1)
         new_hidden = F.leaky_relu(self.joint_lin(joined))
 
         # mu = 10 * F.tanh(self.lin_mu(new_hidden) / 10)

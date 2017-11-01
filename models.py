@@ -116,6 +116,7 @@ class IndependentModel(nn.Module):
         total_z_dim = n_latents * self.hidden_dim
 
         self.transitions = nn.ModuleList([transition(self.hidden_dim,
+                                                     128,
                                                      layers=opt.trans_layers)
                                           for _ in range(n_latents)])
 
@@ -137,13 +138,14 @@ class IndependentModel(nn.Module):
         return cat_prior
 
     def forward(self, sequence, motion_weight=0):
-        reshaped_sequence = [x.resize(x.size(0), *self.image_dim)
-                             for x in sequence]
+        # sequence = [x.resize(x.size(0), *self.image_dim)
+        #                      for x in sequence]
 
         output = {
             'generations': [],
             'prior_variances': [],
             'posterior_variances': [],
+            'latents': None,
             'seq_divergence': Variable(torch.zeros(1).type(dtype)),
             'seq_prior_div': Variable(torch.zeros(1).type(dtype)),
             'seq_trans_div': Variable(torch.zeros(1).type(dtype)),
@@ -162,10 +164,10 @@ class IndependentModel(nn.Module):
         for t in range(len(sequence)):
             start_trans_div = 1
             # give it the sample from z_{t-1}
-            # inferred_z_post = self.inference(reshaped_sequence[t+1], z_sample)
+            # inferred_z_post = self.inference(sequence[t+1], z_sample)
 
             # give it the mean and logvar2 of the prior p(z_t | z_{t-1})
-            inferred_z_post = self.inference(reshaped_sequence[t],
+            inferred_z_post = self.inference(sequence[t],
                                              (cat_prior[0].detach(),
                                               cat_prior[1].detach()))
 
@@ -186,10 +188,14 @@ class IndependentModel(nn.Module):
 
             if opt.loss == 'normal':
                 log_likelihood = LL(gen_dist,
-                                    reshaped_sequence[t])
+                                    sequence[t])
             elif opt.loss == 'bce':
-                log_likelihood = -bce(gen_dist[0], reshaped_sequence[t]) / \
-                    sequence[0].size(0)
+                # ipdb.set_trace()
+                # print("Input: {:.4e}, {:.4e}; Target: {:.4e}, {:.4e}".format(
+                #     gen_dist[0].data.min(), gen_dist[0].data.max(),
+                #     sequence[t].data.min(), sequence[t].data.max()))
+                log_likelihood = -bce(gen_dist[0], sequence[t]) / \
+                sequence[0].size(0)
             else:
                 raise Exception('Invalid loss function.')
 
@@ -210,6 +216,8 @@ class IndependentModel(nn.Module):
         output['seq_divergence'] /= len(sequence)
         if len(sequence) > 1:
             output['seq_trans_div'] /= (len(sequence) - start_trans_div)
+
+        output['latents'] = latents[1:]
 
         return output
 
