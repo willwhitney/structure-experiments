@@ -278,7 +278,7 @@ class IndependentModel(nn.Module):
         # starting_latent1 = latents[-2].clone()
         starting_latent2 = latent.clone()
         for z_i in range(self.n_latents):
-            latent1 = starting_latent1.clone()
+            # latent1 = starting_latent1.clone()
             latent2 = starting_latent2.clone()
             trans = self.transitions[z_i]
             for t in range(steps - priming_steps):
