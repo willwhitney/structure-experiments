@@ -42,6 +42,7 @@ parser.add_argument('--resume', action="store_true")
 parser.add_argument('--print-every', default=50000, type=int)
 parser.add_argument('--cov-every', default=200000, type=int)
 parser.add_argument('--save-every', default=200000, type=int)
+parser.add_argument('--test-every', default=200000, type=int)
 parser.add_argument('--max-steps', default=5e8, type=int)
 parser.add_argument('--seed', default=0, type=int)
 

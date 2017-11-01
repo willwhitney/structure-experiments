@@ -85,6 +85,19 @@ logging.debug(("step,loss,nll,divergence,prior divergence,trans divergence,"
                "pvarmin,pvarmean,pvarmax,"
                "lr"))
 
+test_log = open(opt.save + "/test.csv", 'w')
+test_log.write(("step,loss,nll,divergence,prior divergence,trans divergence,"
+                "selfmi,crossmi,"
+                "qvarmin,qvarmean,qvarmax,"
+                "pvarmin,pvarmean,pvarmax"))
+
+# def log_test(step, loss, nll, divergence, prior_divergence, trans_divergence,
+#              self_mi, cross_mi, qvarmin, qvarmean, qvarmax,
+#              pvarmin, pvarmean, pvarmax):
+def log_test_results(log_values):
+    format_string = ",".join(["{:.8e}"] * len(log_values))
+    test_log.write(format_string.format(*log_values))
+
 # --------- load a dataset ------------------------------------
 train_data, test_data, load_workers = load_dataset(opt)
 
@@ -112,6 +125,14 @@ optimizer = optim.Adam(
 lr_lambda = lambda epoch: opt.lr_decay ** (i / 320000)
 scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda)
 
+
+def get_test_batch():
+    while True:
+        for sequence in test_loader:
+            batch = normalize_data(opt, dtype, sequence)
+            yield batch
+
+test_batch_generator = get_test_batch()
 
 # --------- set up bookkeeper and its functions ---------------
 sequence, generations = None, None
@@ -170,14 +191,14 @@ def update_reducer(step, state, updates):
                                  state['p_var_max'])
 
 
-def make_covariance(step, state):
+def make_covariance(step, state, label="train"):
     mean_self_MI, mean_cross_MI = None, None
     if opt.seq_len > 1:
         mean_self_MI, mean_cross_MI = construct_cross_covariance(
             opt.save + '/covariance/',
             state['cov_latents'], 
             opt.latent_dim,
-            label="train_" + str(step))
+            label=label + "_" + str(step))
     return mean_self_MI, mean_cross_MI
     # construct_covariance(opt.save + '/covariance/',
     #                      model, test_loader, 10,
@@ -243,10 +264,39 @@ def save_checkpoint(step, state):
     }
     torch.save(save_dict, opt.save + '/model.t7')
 
+
+def evaluate(step, _):
+    state = reset_state({})
+    test_cov_latents = []
+
+    n_test_steps = opt.print_every
+    for i in range(n_test_steps):
+        sequence = next(test_batch_generator)
+        output = model(sequence, motion_weight=opt.motion_weight)
+        update_reducer(i, state, output)
+    batches = n_test_steps / opt.batch_size
+
+    self_MI, cross_MI = make_covariance(step, state, "test")
+    log_values = (step,
+                  state['mean_loss'] / batches,
+                  state['mean_nll'] / batches,
+                  state['mean_divergence'] / batches,
+                  state['mean_prior_div'] / batches,
+                  state['mean_trans_div'] / batches,
+                  self_MI,
+                  cross_MI,
+                  state['q_var_min'],
+                  q_var_mean,
+                  state['q_var_max'],
+                  state['p_var_min'],
+                  p_var_mean,
+                  state['p_var_max'])
+    log_test_results(log_values)
+
 bookkeeper = Bookkeeper(i, reset_state({}), update_reducer)
 bookkeeper.every(opt.print_every, make_log)
 bookkeeper.every(opt.save_every, save_checkpoint)
-# bookkeeper.every(opt.cov_every, make_covariance)
+bookkeeper.every(opt.test_every, evaluate)
 
 random_mean_vars = []
 norandom_mean_vars = []
