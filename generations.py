@@ -5,14 +5,15 @@ from models import *
 import os
 import ipdb
 
-def save_all_generations(step, model, sequence, generations):
+def save_all_generations(step, model, sequence, generations, test=False):
     # volatile input -> no saved intermediate values
     for x in sequence:
         x.volatile = True
     priming = sequence[:2]
 
     def mkpath(name):
-        return os.path.join(opt.save, name, str(step) + '-')
+        mode_str = '/test' if test else ''
+        return os.path.join(opt.save + mode_str, name, str(step) + '-')
 
     save_posterior(mkpath("reconstruction"), model, sequence, generations)
     save_z1_samples(mkpath("prior_sample"), model)

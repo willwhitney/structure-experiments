@@ -89,7 +89,7 @@ test_log = open(opt.save + "/test.csv", 'w')
 test_log.write(("step,loss,nll,divergence,prior divergence,trans divergence,"
                 "selfmi,crossmi,"
                 "qvarmin,qvarmean,qvarmax,"
-                "pvarmin,pvarmean,pvarmax"))
+                "pvarmin,pvarmean,pvarmax\n"))
 
 # def log_test(step, loss, nll, divergence, prior_divergence, trans_divergence,
 #              self_mi, cross_mi, qvarmin, qvarmean, qvarmax,
@@ -97,6 +97,8 @@ test_log.write(("step,loss,nll,divergence,prior divergence,trans divergence,"
 def log_test_results(log_values):
     format_string = ",".join(["{:.8e}"] * len(log_values))
     test_log.write(format_string.format(*log_values))
+    test_log.write("\n")
+    test_log.flush()
 
 # --------- load a dataset ------------------------------------
 train_data, test_data, load_workers = load_dataset(opt)
@@ -270,11 +272,17 @@ def evaluate(step, _):
     test_cov_latents = []
 
     n_test_steps = opt.print_every
-    for i in range(n_test_steps):
+    batches = n_test_steps // opt.batch_size
+    for i in range(batches):
         sequence = next(test_batch_generator)
         output = model(sequence, motion_weight=opt.motion_weight)
         update_reducer(i, state, output)
-    batches = n_test_steps / opt.batch_size
+
+    q_var_mean = sum(state['q_var_means']) / len(state['q_var_means'])
+    if opt.seq_len > 1:
+        p_var_mean = sum(state['p_var_means']) / len(state['p_var_means'])
+    else:
+        p_var_mean = 0
 
     self_MI, cross_MI = make_covariance(step, state, "test")
     log_values = (step,
@@ -292,6 +300,11 @@ def evaluate(step, _):
                   p_var_mean,
                   state['p_var_max'])
     log_test_results(log_values)
+
+    try:
+        save_all_generations(step, model, sequence, generations, test=True)
+    except:
+        traceback.print_exc()
 
 bookkeeper = Bookkeeper(i, reset_state({}), update_reducer)
 bookkeeper.every(opt.print_every, make_log)
