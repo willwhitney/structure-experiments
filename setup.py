@@ -118,6 +118,8 @@ def load_dataset(opt):
             load_workers = 0
         # 'urban' datasets are in-memory stores
         elif data_path.find('urban') >= 0:
+            if hostname == 'zaan':
+                data_path = '/home/will/data/' + opt.data
             if not data_path[-3:] == '.t7':
                 data_path = data_path + '/dataset.t7'
 

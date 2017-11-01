@@ -266,8 +266,8 @@ while i < opt.max_steps:
         # scale the KL however appropriate
         kl_penalty = seq_divergence * opt.kl_weight
         if opt.kl_anneal:
-            kl_weight = max(0, min(i / opt.kl_anneal_end, 1))
-            kl_penalty = kl_weight * kl_penalty
+            anneal_scale = max(0, min(i / opt.kl_anneal_end, 1))
+            kl_penalty = anneal_scale * kl_penalty
 
         loss = nll + kl_penalty
 
