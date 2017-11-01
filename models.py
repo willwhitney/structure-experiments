@@ -145,6 +145,7 @@ class IndependentModel(nn.Module):
             'generations': [],
             'prior_variances': [],
             'posterior_variances': [],
+            'latents': None,
             'seq_divergence': Variable(torch.zeros(1).type(dtype)),
             'seq_prior_div': Variable(torch.zeros(1).type(dtype)),
             'seq_trans_div': Variable(torch.zeros(1).type(dtype)),
@@ -215,6 +216,8 @@ class IndependentModel(nn.Module):
         output['seq_divergence'] /= len(sequence)
         if len(sequence) > 1:
             output['seq_trans_div'] /= (len(sequence) - start_trans_div)
+
+        output['latents'] = latents[1:]
 
         return output
 

@@ -17,6 +17,7 @@ import logging
 import shutil
 import time
 import traceback
+import collections
 
 import ipdb
 
@@ -29,7 +30,7 @@ from setup import *
 from generations import *
 from bookkeeper import Bookkeeper
 
-from covariance import construct_covariance
+from covariance import construct_cross_covariance
 
 print("Tensor type: ", dtype)
 
@@ -79,9 +80,10 @@ logging.basicConfig(filename = opt.save + "/results.csv",
                     level = logging.DEBUG,
                     format = "%(message)s")
 logging.debug(("step,loss,nll,divergence,prior divergence,trans divergence,"
+               "selfmi,crossmi,ms/seq,"
                "qvarmin,qvarmean,qvarmax,"
                "pvarmin,pvarmean,pvarmax,"
-               "ms/seq,lr"))
+               "lr"))
 
 # --------- load a dataset ------------------------------------
 train_data, test_data, load_workers = load_dataset(opt)
@@ -129,6 +131,8 @@ def reset_state(state):
     state['p_var_means'] = []
     state['p_var_min'] = 100
     state['p_var_max'] = -100
+
+    state['cov_latents'] = collections.deque(maxlen=1000)
     state['progress'] = progressbar.ProgressBar(max_value=opt.print_every)
     return state
 
@@ -153,12 +157,31 @@ def update_reducer(step, state, updates):
     state['q_var_max'] = max(*[v.data.max() for v in q_vars],
                              state['q_var_max'])
 
+    for t, latent in enumerate(updates['latents'][:-1]):
+        next_latent = updates['latents'][t+1]
+        latent_pair = torch.cat([latent, next_latent], 1).data.cpu()
+        state['cov_latents'].extend(list(latent_pair))
+
     if opt.seq_len > 1:
         state['p_var_means'].append(mean_of_means(p_vars))
         state['p_var_min'] = min(*[v.data.min() for v in p_vars],
                                  state['p_var_min'])
         state['p_var_max'] = max(*[v.data.max() for v in p_vars],
                                  state['p_var_max'])
+
+
+def make_covariance(step, state):
+    mean_self_MI, mean_cross_MI = None, None
+    if opt.seq_len > 1:
+        mean_self_MI, mean_cross_MI = construct_cross_covariance(
+            opt.save + '/covariance/',
+            state['cov_latents'], 
+            opt.latent_dim,
+            label="train_" + str(step))
+    return mean_self_MI, mean_cross_MI
+    # construct_covariance(opt.save + '/covariance/',
+    #                      model, test_loader, 10,
+    #                      label="test_" + str(step))
 
 def make_log(step, state):
     state['progress'].finish()
@@ -174,30 +197,33 @@ def make_log(step, state):
     else:
         p_var_mean = 0
 
+    self_MI, cross_MI = make_covariance(step, state)
+
     log_values = (step,
                   state['mean_loss'] / batches,
                   state['mean_nll'] / batches,
                   state['mean_divergence'] / batches,
                   state['mean_prior_div'] / batches,
                   state['mean_trans_div'] / batches,
+                  self_MI,
+                  cross_MI,
+                  # mean_grad_norm / batches,
+                  elapsed_seconds / opt.print_every * 1000,
                   state['q_var_min'],
                   q_var_mean,
                   state['q_var_max'],
                   state['p_var_min'],
                   p_var_mean,
                   state['p_var_max'],
-                  # mean_grad_norm / batches,
-                  elapsed_seconds / opt.print_every * 1000,
                   scheduler.get_lr()[0])
 
     print(("Step: {:8d}, Loss: {:8.3f}, NLL: {:8.3f}, "
            "Divergence: {:8.3f}, "
            "Prior divergence: {:8.3f}, "
            "Trans divergence: {:8.3f}, "
-           "q(z) vars: [{:7.3f}, {:7.3f}, {:7.3f}], "
-           "p(z) vars: [{:7.3f}, {:7.3f}, {:7.3f}], "
-           # "Grad norm: {:10.3f}, "
-           "ms/seq: {:6.2f}").format(*log_values[:-1]))
+           "self MI: {:8.3f}, "
+           "cross MI: {:8.3f}, "
+           "ms/seq: {:6.2f}").format(*log_values[:-7]))
 
     # make list of n copies of format string, then format
     format_string = ",".join(["{:.8e}"]*len(log_values))
@@ -216,15 +242,6 @@ def save_checkpoint(step, state):
         'i': step,
     }
     torch.save(save_dict, opt.save + '/model.t7')
-
-def make_covariance(step, state):
-    if opt.seq_len > 1:
-        construct_covariance(opt.save + '/covariance/',
-                             model, train_loader, 10,
-                             label="train_" + str(step))
-        construct_covariance(opt.save + '/covariance/',
-                             model, test_loader, 10,
-                             label="test_" + str(step))
 
 bookkeeper = Bookkeeper(i, reset_state({}), update_reducer)
 bookkeeper.every(opt.print_every, make_log)

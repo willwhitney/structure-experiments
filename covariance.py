@@ -91,6 +91,76 @@ def construct_covariance(savedir, list_of_samples, latent_dim, label):
 
     return sum(MIs) / len(MIs)
 
+@ensure_path_exists
+def construct_cross_covariance(
+        savedir, list_of_samples, latent_dim, label):
+    
+    # tensor_of_s1 = torch.stack(list_of_samples1, 0)
+    # tensor_of_s2 = torch.stack(list_of_samples2, 0)
+    # tensor_of_samples = torch.cat([tensor_of_s1, tensor_of_s2], 1)
+    tensor_of_samples = torch.stack(list_of_samples, 0)
+    z_dim = tensor_of_samples.size(1) // 2
+    n_latents = z_dim // latent_dim
+
+    data = tensor_of_samples.cpu().numpy()
+
+
+    df = pd.DataFrame(data)
+    corr_df = df.corr()
+    corr = np.array(corr_df)[z_dim:, :z_dim]
+
+    fig = plt.figure()
+    hm = seaborn.heatmap(corr,
+                         xticklabels=latent_dim,
+                         yticklabels=latent_dim)
+
+    for i in range(1, n_latents):
+        location = i * latent_dim
+        plt.plot([0, z_dim], [location, location],
+                 color='black', linewidth=0.5)
+        plt.plot([location, location], [0, z_dim],
+                 color='black', linewidth=0.5)
+    name = "{}corr_{}.pdf".format(savedir, label)
+    plt.savefig(name)
+    plt.close(fig)
+
+    fig = plt.figure()
+    cov = np.array(df.cov())[z_dim:, :z_dim]
+    hm = seaborn.heatmap(cov,
+                         xticklabels=latent_dim,
+                         yticklabels=latent_dim)
+
+    for i in range(1, n_latents):
+        location = i * latent_dim
+        plt.plot([0, z_dim], [location, location],
+                 color='black', linewidth=0.5)
+        plt.plot([location, location], [0, z_dim],
+                 color='black', linewidth=0.5)
+    name = "{}cov_{}.pdf".format(savedir, label)
+    plt.savefig(name)
+    plt.close(fig)
+
+    tensor_of_samples1 = tensor_of_samples[:, :z_dim]
+    tensor_of_samples2 = tensor_of_samples[:, z_dim:]
+    list_of_before_factors = [batch_select(tensor_of_samples1, latent_dim,
+                                            start=i, end=i).cpu().numpy()
+                                for i in range(n_latents)]
+    list_of_after_factors = [batch_select(tensor_of_samples2, latent_dim,
+                                            start=i, end=i).cpu().numpy()
+                                for i in range(n_latents)]
+
+    self_MIs = []
+    cross_MIs = []
+    for i, a in enumerate(list_of_before_factors):
+        for j, b in enumerate(list_of_after_factors[i:]):
+            info = mutual_information(a, b)
+            if j == 0:
+                self_MIs.append(info)
+            else:
+                cross_MIs.append(info)
+
+    return sum(self_MIs) / len(self_MIs), sum(cross_MIs) / len(cross_MIs)
+
 
 
 
