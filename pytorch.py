@@ -276,7 +276,7 @@ def evaluate(step, _):
     for i in range(batches):
         sequence = next(test_batch_generator)
         output = model(sequence, motion_weight=opt.motion_weight)
-        update_reducer(i, state, output)
+        update_reducer(i * opt.batch_size, state, output)
 
     q_var_mean = sum(state['q_var_means']) / len(state['q_var_means'])
     if opt.seq_len > 1:
