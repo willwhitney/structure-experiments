@@ -246,13 +246,12 @@ class IndependentModel(nn.Module):
         for t in range(1, priming_steps):
             latents.append(latent)
             latent = self.inference(priming[t],
-                                    self.predict_latent((latents[-2],
-                                                         latent)))[0]
+                                    self.predict_latent(latent))[0]
 
         for t in range(steps - priming_steps):
             # make a transition
             latents.append(latent)
-            latent_dist = self.predict_latent((latents[-2], latent))
+            latent_dist = self.predict_latent(latent)
 
             if sampling:
                 latent = sample_log2(latent_dist)
@@ -274,29 +273,28 @@ class IndependentModel(nn.Module):
         for t in range(1, priming_steps):
             latents.append(latent)
             latent = self.inference(priming[t],
-                                    self.predict_latent((latents[-2],
-                                                         latent)))[0]
+                                    self.predict_latent(latent))[0]
 
-        starting_latent1 = latents[-2].clone()
+        # starting_latent1 = latents[-2].clone()
         starting_latent2 = latent.clone()
         for z_i in range(self.n_latents):
             latent1 = starting_latent1.clone()
             latent2 = starting_latent2.clone()
             trans = self.transitions[z_i]
             for t in range(steps - priming_steps):
-                previous1 = latent1[:,
-                                    z_i * self.hidden_dim:
-                                    (z_i + 1) * self.hidden_dim].clone()
+                # previous1 = latent1[:,
+                #                     z_i * self.hidden_dim:
+                #                     (z_i + 1) * self.hidden_dim].clone()
                 previous2 = latent2[:,
                                     z_i * self.hidden_dim:
                                     (z_i + 1) * self.hidden_dim].clone()
-                predicted_z = trans((previous1, previous2))
+                predicted_z = trans(previous2)
 
                 if sampling:
                     new_z = sample_log2(predicted_z)
                 else:
                     new_z = predicted_z[0]
-                latent1 = latent2.clone()
+                # latent1 = latent2.clone()
                 latent2[:, z_i * self.hidden_dim:
                         (z_i + 1) * self.hidden_dim] = new_z
 
@@ -316,8 +314,7 @@ class IndependentModel(nn.Module):
         for t in range(1, priming_steps):
             latents.append(latent)
             latent = self.inference(priming[t],
-                                    self.predict_latent((latents[-2],
-                                                         latent)))[0]
+                                    self.predict_latent(latent))[0]
 
         starting_latent = latent.clone()
         for z_i in range(self.n_latents):
@@ -342,8 +339,7 @@ class IndependentModel(nn.Module):
         for t in range(1, priming_steps):
             latents.append(latent)
             latent = self.inference(priming[t],
-                                    self.predict_latent((latents[-2],
-                                                         latent)))[0]
+                                    self.predict_latent(latent))[0]
 
         z_const = latent.clone()
         noise = Variable(torch.zeros(
@@ -382,7 +378,7 @@ class IndependentModel(nn.Module):
             posterior_generations.append(gen_dist[0].cpu())
 
             if t < len(sequence) - 1:
-                cat_prior = self.predict_latent((latents[-2], z_sample))
+                cat_prior = self.predict_latent(z_sample)
                 inferred_z_post = self.inference(sequence[t + 1],
                                                  cat_prior)
 
