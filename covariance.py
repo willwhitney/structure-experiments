@@ -93,7 +93,8 @@ def construct_covariance(savedir, list_of_samples, latent_dim, label):
 
 @ensure_path_exists
 def construct_cross_covariance(
-        savedir, list_of_samples, latent_dim, label):
+        savedir, list_of_samples, latent_dim, label, 
+        no_plots=False, random_factors=False):
     
     # tensor_of_s1 = torch.stack(list_of_samples1, 0)
     # tensor_of_s2 = torch.stack(list_of_samples2, 0)
@@ -102,46 +103,71 @@ def construct_cross_covariance(
     z_dim = tensor_of_samples.size(1) // 2
     n_latents = z_dim // latent_dim
 
-    data = tensor_of_samples.cpu().numpy()
+    if not no_plots:
+        data = tensor_of_samples.cpu().numpy()
 
+        df = pd.DataFrame(data)
+        corr_df = df.corr()
+        corr = np.array(corr_df)[z_dim:, :z_dim]
 
-    df = pd.DataFrame(data)
-    corr_df = df.corr()
-    corr = np.array(corr_df)[z_dim:, :z_dim]
+        fig = plt.figure()
+        hm = seaborn.heatmap(corr,
+                             xticklabels=latent_dim,
+                             yticklabels=latent_dim)
 
-    fig = plt.figure()
-    hm = seaborn.heatmap(corr,
-                         xticklabels=latent_dim,
-                         yticklabels=latent_dim)
+        for i in range(1, n_latents):
+            location = i * latent_dim
+            plt.plot([0, z_dim], [location, location],
+                     color='black', linewidth=0.5)
+            plt.plot([location, location], [0, z_dim],
+                     color='black', linewidth=0.5)
+        name = "{}corr_{}.pdf".format(savedir, label)
+        plt.savefig(name)
+        plt.close(fig)
 
-    for i in range(1, n_latents):
-        location = i * latent_dim
-        plt.plot([0, z_dim], [location, location],
-                 color='black', linewidth=0.5)
-        plt.plot([location, location], [0, z_dim],
-                 color='black', linewidth=0.5)
-    name = "{}corr_{}.pdf".format(savedir, label)
-    plt.savefig(name)
-    plt.close(fig)
+        fig = plt.figure()
+        cov = np.array(df.cov())[z_dim:, :z_dim]
+        hm = seaborn.heatmap(cov,
+                             xticklabels=latent_dim,
+                             yticklabels=latent_dim)
 
-    fig = plt.figure()
-    cov = np.array(df.cov())[z_dim:, :z_dim]
-    hm = seaborn.heatmap(cov,
-                         xticklabels=latent_dim,
-                         yticklabels=latent_dim)
+        for i in range(1, n_latents):
+            location = i * latent_dim
+            plt.plot([0, z_dim], [location, location],
+                     color='black', linewidth=0.5)
+            plt.plot([location, location], [0, z_dim],
+                     color='black', linewidth=0.5)
+        name = "{}cov_{}.pdf".format(savedir, label)
+        plt.savefig(name)
+        plt.close(fig)
 
-    for i in range(1, n_latents):
-        location = i * latent_dim
-        plt.plot([0, z_dim], [location, location],
-                 color='black', linewidth=0.5)
-        plt.plot([location, location], [0, z_dim],
-                 color='black', linewidth=0.5)
-    name = "{}cov_{}.pdf".format(savedir, label)
-    plt.savefig(name)
-    plt.close(fig)
+    if n_latents <= 1:
+        return 0, 0
 
     tensor_of_samples1 = tensor_of_samples[:, :z_dim]
     tensor_of_samples2 = tensor_of_samples[:, z_dim:]
+    if random_factors:
+        best_gap = -100
+        best_self = None
+        best_cross = None
+        for i in range(20):
+            perm = torch.randperm(z_dim)
+            tensor_of_samples1 = tensor_of_samples1[:, perm]
+            tensor_of_samples2 = tensor_of_samples2[:, perm]
+            self_MI, cross_MI = compute_MI(tensor_of_samples1, 
+                                           tensor_of_samples2, 
+                                           n_latents, latent_dim)
+            gap = self_MI - cross_MI
+            if gap > best_gap and self_MI > 0 and cross_MI > 0:
+                best_gap = gap
+                best_self = self_MI
+                best_cross = cross_MI
+        return best_self, best_cross
+    else:
+        return compute_MI(tensor_of_samples1, tensor_of_samples2, 
+                          n_latents, latent_dim)
+
+def compute_MI(tensor_of_samples1, tensor_of_samples2, n_latents, latent_dim):
     list_of_before_factors = [batch_select(tensor_of_samples1, latent_dim,
                                             start=i, end=i).cpu().numpy()
                                 for i in range(n_latents)]

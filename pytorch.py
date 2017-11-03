@@ -201,6 +201,17 @@ def make_covariance(step, state, label="train"):
             state['cov_latents'], 
             opt.latent_dim,
             label=label + "_" + str(step))
+
+        if opt.latents == 1:
+            # run this to estimate mutual information between 
+            # random subsets of the latent space
+            mean_self_MI, mean_cross_MI = construct_cross_covariance(
+                opt.save + '/covariance/',
+                state['cov_latents'], 
+                opt.mi_latent_dim,
+                label="dummy_" + str(step),
+                no_plots=True,
+                random_factors=True)
     return mean_self_MI, mean_cross_MI
     # construct_covariance(opt.save + '/covariance/',
     #                      model, test_loader, 10,

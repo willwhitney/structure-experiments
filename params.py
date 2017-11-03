@@ -63,6 +63,7 @@ parser.add_argument('--kl-weight', default=1.0, type=float)
 parser.add_argument('--output-var', default=0.01, type=float)
 parser.add_argument('--latents', default=2, type=int)
 parser.add_argument('--latent-dim', default=25, type=int)
+parser.add_argument('--mi-latent-dim', default=25, type=int)
 parser.add_argument('--trans-layers', default=4, type=int)
 parser.add_argument('--tiny', action="store_true")
 
