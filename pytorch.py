@@ -231,7 +231,9 @@ def make_log(step, state):
     else:
         p_var_mean = 0
 
-    self_MI, cross_MI = make_covariance(step, state)
+    # self_MI, cross_MI = make_covariance(step, state)
+    # only do covariance and MI when testing
+    self_MI, cross_MI = 0, 0
 
     log_values = (step,
                   state['mean_loss'] / batches,
@@ -285,8 +287,9 @@ def evaluate(step, _):
     n_test_steps = opt.print_every
     batches = n_test_steps // opt.batch_size
     for i in range(batches):
-        sequence = next(test_batch_generator)
-        output = model(sequence, motion_weight=opt.motion_weight)
+        test_sequence = next(test_batch_generator)
+        output = model(test_sequence, motion_weight=opt.motion_weight)
+        test_generations = output['generations']
         update_reducer(i * opt.batch_size, state, output)
 
     q_var_mean = sum(state['q_var_means']) / len(state['q_var_means'])
@@ -313,7 +316,8 @@ def evaluate(step, _):
     log_test_results(log_values)
 
     try:
-        save_all_generations(step, model, sequence, generations, test=True)
+        save_all_generations(step, model, test_sequence, test_generations, 
+                             test=True)
     except:
         traceback.print_exc()
 

@@ -107,11 +107,11 @@ class DCGANInference(nn.Module):
                        ndf * 2,
                        ndf * 4,
                        ndf * 8,
-                       ndf // 2]
+                       hidden_dim]
+                       # ndf // 2]
         self.kernels = [4, 4, 4, 4, 4]
         self.strides = [2, 2, 2, 2, 1]
         self.pads = [1, 1, 1, 1, 0]
-
 
         # self.planes = [32, 16]
         # self.kernels = [3, 3]
